@@ -7,7 +7,8 @@ export default function NewsPanel({ companyId }: { companyId: string }) {
   const { data: newsItems, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['news', companyId],
     queryFn: async () => {
-      const res = await fetch(`http://localhost:4000/api/companies/${companyId}/news`);
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const res = await fetch(`${baseUrl}/api/companies/${companyId}/news`);
       if (!res.ok) throw new Error('Failed to fetch news');
       return res.json();
     },

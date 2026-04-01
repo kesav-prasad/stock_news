@@ -38,7 +38,8 @@ export default function DashboardPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['companies'],
     queryFn: async () => {
-      const res = await fetch(`http://localhost:4000/api/companies?limit=5000`);
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const res = await fetch(`${baseUrl}/api/companies?limit=5000`);
       if (!res.ok) throw new Error('Network response was not ok');
       return res.json();
     },
