@@ -17,9 +17,10 @@ interface StockGridProps {
   onSelectCompany: (company: Company) => void;
   isInWatchlist: (companyId: string) => boolean;
   onToggleWatchlist: (companyId: string) => void;
+  isPending?: boolean;
 }
 
-const StockGrid = memo(function StockGrid({ companies, onSelectCompany, isInWatchlist, onToggleWatchlist }: StockGridProps) {
+const StockGrid = memo(function StockGrid({ companies, onSelectCompany, isInWatchlist, onToggleWatchlist, isPending }: StockGridProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columnCount, setColumnCount] = useState(1);
 
@@ -49,7 +50,11 @@ const StockGrid = memo(function StockGrid({ companies, onSelectCompany, isInWatc
   }
 
   return (
-    <div ref={parentRef} className="flex-1 overflow-auto w-full" style={{ height: 'calc(100dvh - 260px)' }}>
+    <div 
+      ref={parentRef} 
+      className={`flex-1 overflow-auto w-full transition-opacity duration-200 ${isPending ? 'opacity-50 pointer-events-none' : 'opacity-100'}`} 
+      style={{ height: 'calc(100dvh - 260px)' }}
+    >
       <div className="w-full relative" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
           const startIndex = virtualRow.index * columnCount;

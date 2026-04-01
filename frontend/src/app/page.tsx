@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useDeferredValue, useCallback } from 'react';
+import { useState, useMemo, useDeferredValue, useCallback, useTransition } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Search, BarChart3, SlidersHorizontal, Heart, Star, Trash2 } from 'lucide-react';
@@ -25,6 +25,13 @@ export default function DashboardPage() {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [activeTab, setActiveTab] = useState<ViewTab>('all');
+  const [isPending, startTransition] = useTransition();
+
+  const handleTabChange = useCallback((tab: ViewTab) => {
+    startTransition(() => {
+      setActiveTab(tab);
+    });
+  }, []);
 
   const {
     watchlistIds,
@@ -143,7 +150,7 @@ export default function DashboardPage() {
             {/* View tabs — pure CSS, no framer */}
             <div className="flex bg-gray-100 dark:bg-gray-800/80 p-0.5 sm:p-1 rounded-lg sm:rounded-xl">
               <button
-                onClick={() => setActiveTab('all')}
+                onClick={() => handleTabChange('all')}
                 className={`flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md sm:rounded-lg text-xs sm:text-sm font-semibold transition-all duration-150 ${
                   activeTab === 'all'
                     ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
@@ -155,7 +162,7 @@ export default function DashboardPage() {
               </button>
 
               <button
-                onClick={() => setActiveTab('watchlist')}
+                onClick={() => handleTabChange('watchlist')}
                 className={`flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md sm:rounded-lg text-xs sm:text-sm font-semibold transition-all duration-150 ${
                   activeTab === 'watchlist'
                     ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
@@ -242,7 +249,7 @@ export default function DashboardPage() {
                     Tap the <Heart size={12} className="inline text-amber-500 fill-amber-500 mx-0.5 -mt-0.5" /> icon on any company card to add it to your watchlist for quick access.
                   </p>
                   <button
-                    onClick={() => setActiveTab('all')}
+                    onClick={() => handleTabChange('all')}
                     className="px-4 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold rounded-lg sm:rounded-xl shadow-md hover:shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
                   >
                     Browse Companies
@@ -260,6 +267,7 @@ export default function DashboardPage() {
               onSelectCompany={handleSelectCompany}
               isInWatchlist={isInWatchlist}
               onToggleWatchlist={toggleWatchlist}
+              isPending={isPending}
             />
           )}
         </main>
