@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/index.ts",
-    "start": "ts-node src/index.ts",
+    "start": "npx prisma generate && npx prisma db push --accept-data-loss && npm run seed && ts-node src/index.ts",
     "seed": "ts-node src/scripts/seedCompanies.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
