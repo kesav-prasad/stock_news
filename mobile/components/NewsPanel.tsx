@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -28,7 +29,7 @@ function NewsItem({ article, colors }: { article: NewsArticle; colors: typeof Co
     <TouchableOpacity
       style={[styles.newsItem, { backgroundColor: colors.surfaceElevated, borderColor: colors.borderLight }]}
       activeOpacity={0.7}
-      onPress={() => Linking.openURL(article.url)}
+      onPress={() => WebBrowser.openBrowserAsync(article.url)}
     >
       <View style={styles.newsHeader}>
         <View style={[styles.sourceBadge, { backgroundColor: colors.accentLight }]}>

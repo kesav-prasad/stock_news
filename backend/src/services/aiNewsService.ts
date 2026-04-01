@@ -24,12 +24,12 @@ export async function fetchNewsForCompany(
   name: string
 ) {
   try {
-    const query = encodeURIComponent(`${name} stock India`);
+    const query = encodeURIComponent(`${name} stock India when:2y`);
     const feed = await parser.parseURL(
       `https://news.google.com/rss/search?q=${query}&hl=en-IN&gl=IN&ceid=IN:en`
     );
 
-    const topEntries = feed.items.slice(0, 8);
+    const topEntries = feed.items.slice(0, 50);
 
     const company = await prisma.company.findUnique({ where: { symbol } });
     if (!company) return [];
@@ -106,7 +106,7 @@ export async function fetchNewsForCompany(
       where: { companyId: company.id },
       include: { news: true },
       orderBy: { news: { publishedAt: 'desc' } },
-      take: 10,
+      take: 50,
     });
 
     return allNews.map((n) => n.news);

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TextInput,
-  FlatList,
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { FlashList } from '@shopify/flash-list';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Colors, Spacing, Radius, FontSize } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -161,39 +161,36 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={companies}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
-          numColumns={numColumns}
-          key={`cols-${numColumns}`}
-          contentContainerStyle={[
-            styles.listContent,
-            { paddingBottom: insets.bottom + 80 },
-          ]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={loading}
-              onRefresh={refetch}
-              tintColor={colors.primary}
-              colors={[colors.primary]}
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.centerContainer}>
-              <Ionicons name="search-outline" size={48} color={colors.textTertiary} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                No companies found
-              </Text>
-            </View>
-          }
-          initialNumToRender={12}
-          maxToRenderPerBatch={10}
-          windowSize={7}
-          removeClippedSubviews={true}
-          getItemLayout={undefined}
-        />
+        <View style={{ flex: 1 }}>
+          <FlashList
+            data={companies}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            numColumns={numColumns}
+            estimatedItemSize={150}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingBottom: insets.bottom + 80 },
+            ]}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={loading}
+                onRefresh={refetch}
+                tintColor={colors.primary}
+                colors={[colors.primary]}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.centerContainer}>
+                <Ionicons name="search-outline" size={48} color={colors.textTertiary} />
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                  No companies found
+                </Text>
+              </View>
+            }
+          />
+        </View>
       )}
 
       {/* Company Modal */}
