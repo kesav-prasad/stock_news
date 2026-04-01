@@ -1,0 +1,105 @@
+import { Platform } from 'react-native';
+
+export const Colors = {
+  light: {
+    text: '#111827',
+    textSecondary: '#6B7280',
+    textTertiary: '#9CA3AF',
+    background: '#F9FAFB',
+    surface: '#FFFFFF',
+    surfaceElevated: '#F3F4F6',
+    border: '#E5E7EB',
+    borderLight: '#F3F4F6',
+    primary: '#2563EB',
+    primaryLight: '#EFF6FF',
+    primaryDark: '#1D4ED8',
+    accent: '#6366F1',
+    accentLight: '#EEF2FF',
+    amber: '#F59E0B',
+    amberLight: '#FEF3C7',
+    amberDark: '#D97706',
+    green: '#10B981',
+    greenLight: '#D1FAE5',
+    red: '#EF4444',
+    redLight: '#FEE2E2',
+    tint: '#2563EB',
+    icon: '#6B7280',
+    tabIconDefault: '#6B7280',
+    tabIconSelected: '#2563EB',
+    shimmer: '#E5E7EB',
+    cardShadow: 'rgba(0, 0, 0, 0.05)',
+    overlay: 'rgba(0, 0, 0, 0.5)',
+  },
+  dark: {
+    text: '#F9FAFB',
+    textSecondary: '#9CA3AF',
+    textTertiary: '#6B7280',
+    background: '#030712',
+    surface: '#111827',
+    surfaceElevated: '#1F2937',
+    border: '#1F2937',
+    borderLight: '#374151',
+    primary: '#3B82F6',
+    primaryLight: '#1E3A5F',
+    primaryDark: '#60A5FA',
+    accent: '#818CF8',
+    accentLight: '#312E81',
+    amber: '#F59E0B',
+    amberLight: '#78350F',
+    amberDark: '#FBBF24',
+    green: '#34D399',
+    greenLight: '#064E3B',
+    red: '#F87171',
+    redLight: '#7F1D1D',
+    tint: '#3B82F6',
+    icon: '#9CA3AF',
+    tabIconDefault: '#9CA3AF',
+    tabIconSelected: '#3B82F6',
+    shimmer: '#374151',
+    cardShadow: 'rgba(0, 0, 0, 0.3)',
+    overlay: 'rgba(0, 0, 0, 0.7)',
+  },
+};
+
+export const Spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+  xxxl: 32,
+};
+
+export const Radius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  full: 9999,
+};
+
+export const FontSize = {
+  xs: 10,
+  sm: 12,
+  md: 14,
+  lg: 16,
+  xl: 18,
+  xxl: 22,
+  xxxl: 28,
+};
+
+export const Fonts = Platform.select({
+  ios: {
+    sans: 'system-ui',
+    serif: 'ui-serif',
+    rounded: 'ui-rounded',
+    mono: 'ui-monospace',
+  },
+  default: {
+    sans: 'normal',
+    serif: 'serif',
+    rounded: 'normal',
+    mono: 'monospace',
+  },
+});

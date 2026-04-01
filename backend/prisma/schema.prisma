@@ -1,0 +1,65 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id          String   @id @default(uuid())
+  symbol      String   @unique // e.g., RELIANCE.NS, TCS.BO
+  name        String
+  exchange    String   // NSE or BSE
+  sector      String?
+  industry    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stockPrices StockPrice[]
+  news        CompanyNews[]
+}
+
+model StockPrice {
+  id          String   @id @default(uuid())
+  companyId   String
+  price       Float
+  change      Float
+  changePercent Float
+  timestamp   DateTime @default(now())
+
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, timestamp(sort: Desc)])
+}
+
+model NewsArticle {
+  id          String   @id @default(uuid())
+  externalId  String?  @unique
+  url         String   @unique
+  title       String
+  source      String
+  publishedAt DateTime
+  summary     String?
+  sentiment   String?  // "bullish" | "bearish" | "neutral"
+  sentimentScore Float? // 0-1 confidence
+  embedding   String? // Store as JSON string in SQLite
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  companies   CompanyNews[]
+}
+
+model CompanyNews {
+  companyId String
+  newsId    String
+
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  news      NewsArticle @relation(fields: [newsId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, newsId])
+}
