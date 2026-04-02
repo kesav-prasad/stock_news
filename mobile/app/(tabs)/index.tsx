@@ -148,9 +148,9 @@ export default function DashboardScreen() {
       ) : error ? (
         <View style={styles.centerContainer}>
           <Ionicons name="cloud-offline-outline" size={48} color={colors.red} />
-          <Text style={[styles.errorTitle, { color: colors.text }]}>Connection Failed</Text>
+          <Text style={[styles.errorTitle, { color: colors.text }]}>Waking Up Server</Text>
           <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
-            Ensure the backend is running on port 4000
+            The server may be sleeping. Tap retry — it usually wakes up within 30 seconds.
           </Text>
           <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: colors.primary }]}

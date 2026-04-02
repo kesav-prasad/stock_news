@@ -9,7 +9,8 @@ const DEV_HOST = Platform.select({
   default: 'localhost',
 });
 
-export const API_BASE_URL = `http://${DEV_HOST}:4000`;
+export const API_BASE_URL = 'https://stock-news-s83g.onrender.com';
+
 
 export const API_ENDPOINTS = {
   companies: `${API_BASE_URL}/api/companies`,
