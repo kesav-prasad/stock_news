@@ -3,10 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STORAGE_KEY = 'stocknews-watchlist';
 
-/**
- * Custom hook for managing a watchlist persisted in AsyncStorage.
- * Compatible with React Native (uses AsyncStorage instead of localStorage).
- */
 export function useWatchlist() {
   const [watchlistIds, setWatchlistIds] = useState<Set<string>>(new Set());
   const [hydrated, setHydrated] = useState(false);
@@ -23,7 +19,7 @@ export function useWatchlist() {
           }
         }
       } catch {
-        // Corrupted data or storage error — start fresh
+        // Corrupted data — start fresh
       }
       setHydrated(true);
     })();
@@ -71,5 +67,6 @@ export function useWatchlist() {
     watchlistCount,
     clearWatchlist,
     hydrated,
+    isSignedIn: true, // always true on mobile (no auth required for local watchlist)
   };
 }

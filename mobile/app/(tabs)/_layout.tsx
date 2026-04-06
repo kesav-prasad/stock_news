@@ -12,7 +12,6 @@ export default function TabLayout() {
   const colors = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
 
-  // Ensure tab bar clears the Android system navigation buttons
   const bottomPadding = Math.max(insets.bottom, 8);
 
   return (

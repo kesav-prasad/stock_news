@@ -20,19 +20,35 @@ function textSimilarity(a: string, b: string): number {
 
 export async function fetchNewsForCompany(
   prisma: PrismaClient,
+  companyId: string,
   symbol: string,
   name: string
 ) {
   try {
+    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    if (!company) return [];
+
+    const CACHE_HOURS = 6;
+    const CACHE_MS = CACHE_HOURS * 60 * 60 * 1000;
+    const now = new Date();
+    
+    // Serve from cache if valid
+    if (company.lastNewsFetch && now.getTime() - company.lastNewsFetch.getTime() < CACHE_MS) {
+      const cachedNews = await prisma.companyNews.findMany({
+        where: { companyId: company.id },
+        include: { news: true },
+        orderBy: { news: { publishedAt: 'desc' } },
+        take: 50,
+      });
+      return cachedNews.map((n) => n.news);
+    }
+
     const query = encodeURIComponent(`${name} stock India when:2y`);
     const feed = await parser.parseURL(
       `https://news.google.com/rss/search?q=${query}&hl=en-IN&gl=IN&ceid=IN:en`
     );
 
     const topEntries = feed.items.slice(0, 50);
-
-    const company = await prisma.company.findUnique({ where: { symbol } });
-    if (!company) return [];
 
     // Fetch existing news for this company to check for duplicates
     const existingLinks = await prisma.companyNews.findMany({
@@ -82,24 +98,40 @@ export async function fetchNewsForCompany(
     // Persist new unique articles
     for (const article of newArticles) {
       try {
-        const dbArticle = await prisma.newsArticle.create({
-          data: {
+        const dbArticle = await prisma.newsArticle.upsert({
+          where: { url: article.link },
+          update: {},
+          create: {
             title: article.title,
             url: article.link,
             source: article.source,
             publishedAt: article.publishedAt,
           },
         });
-        await prisma.companyNews.create({
-          data: {
+
+        await prisma.companyNews.upsert({
+          where: {
+            companyId_newsId: {
+              companyId: company.id,
+              newsId: dbArticle.id,
+            },
+          },
+          update: {},
+          create: {
             companyId: company.id,
             newsId: dbArticle.id,
           },
         });
-      } catch {
-        // URL unique constraint violation — skip
+      } catch (error) {
+        console.error(`Error persisting article for ${symbol}:`, error);
       }
     }
+
+    // Update cache timestamp
+    await prisma.company.update({
+      where: { id: company.id },
+      data: { lastNewsFetch: now },
+    });
 
     // Return all news for this company (latest first)
     const allNews = await prisma.companyNews.findMany({

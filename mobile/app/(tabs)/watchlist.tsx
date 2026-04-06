@@ -17,7 +17,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Colors, Spacing, Radius, FontSize } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCompanies, Company } from '@/hooks/useApi';
-import { useWatchlist } from '@/hooks/useWatchlist';
+import { useSharedWatchlist } from '@/contexts/WatchlistContext';
 import StockCard from '@/components/StockCard';
 import CompanyModal from '@/components/CompanyModal';
 
@@ -33,7 +33,7 @@ export default function WatchlistScreen() {
   // Fetch all companies (no exchange filter for watchlist)
   const { companies, loading, refetch } = useCompanies('', '');
   const { watchlistIds, toggleWatchlist, isInWatchlist, watchlistCount, clearWatchlist, hydrated } =
-    useWatchlist();
+    useSharedWatchlist();
 
   // Filter to only watchlisted companies
   const watchlistCompanies = useMemo(() => {
@@ -67,9 +67,8 @@ export default function WatchlistScreen() {
   };
 
   const renderItem = useCallback(
-    ({ item, index }: { item: Company; index: number }) => (
-      <Animated.View
-        entering={FadeInDown.delay(index * 50).duration(300)}
+    ({ item }: { item: Company }) => (
+      <View
         style={[styles.cardWrapper, { flex: 1 / numColumns, maxWidth: `${100 / numColumns}%` as any }]}
       >
         <StockCard
@@ -78,7 +77,7 @@ export default function WatchlistScreen() {
           isWatchlisted={isInWatchlist(item.id)}
           onToggleWatchlist={toggleWatchlist}
         />
-      </Animated.View>
+      </View>
     ),
     [numColumns, isInWatchlist, toggleWatchlist]
   );
@@ -309,4 +308,14 @@ const styles = StyleSheet.create({
   cardWrapper: {
     padding: Spacing.xs,
   },
+  authButton: {
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.full,
+  },
+  authButtonText: {
+    color: '#fff',
+    fontSize: FontSize.md,
+    fontWeight: '600',
+  }
 });

@@ -55,18 +55,19 @@ export default function StockCard({
 
   const handleHeartPress = () => {
     heartScale.value = withSequence(
-      withSpring(1.4, { damping: 6, stiffness: 400 }),
-      withSpring(1, { damping: 8, stiffness: 300 })
+      withSpring(1.2, { damping: 10, stiffness: 500 }),
+      withSpring(1.1, { damping: 15, stiffness: 600 }),
+      withSpring(1, { damping: 15, stiffness: 600 })
     );
     onToggleWatchlist(company.id);
   };
 
   const handleCardPressIn = () => {
-    cardScale.value = withSpring(0.97, { damping: 15, stiffness: 400 });
+    cardScale.value = withSpring(0.98, { damping: 20, stiffness: 500 });
   };
 
   const handleCardPressOut = () => {
-    cardScale.value = withSpring(1, { damping: 15, stiffness: 400 });
+    cardScale.value = withSpring(1, { damping: 20, stiffness: 500 });
   };
 
   return (

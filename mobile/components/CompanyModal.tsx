@@ -78,8 +78,8 @@ export default function CompanyModal({
 
       {/* Modal Content */}
       <Animated.View
-        entering={SlideInDown.springify().damping(18).stiffness(200)}
-        exiting={SlideOutDown.duration(250)}
+        entering={SlideInDown.springify().damping(25).stiffness(300).mass(1)}
+        exiting={SlideOutDown.duration(200)}
         style={[
           styles.modalContent,
           {

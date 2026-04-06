@@ -1,5 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { API_ENDPOINTS } from '@/constants/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const COMPANIES_CACHE_KEY = 'stocknews-companies-cache';
+const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 
 export interface Company {
   id: string;
@@ -55,32 +59,80 @@ async function fetchWithRetry(url: string, maxRetries = 3, timeoutMs = 45000): P
 
 export function useCompanies(search: string, exchange: string) {
   const [data, setData] = useState<CompaniesResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // default to true if no cache
   const [error, setError] = useState<string | null>(null);
+  const isFirstMount = useRef(true);
+
+  // 1. Load from cache on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const cached = await AsyncStorage.getItem(COMPANIES_CACHE_KEY);
+        if (cached) {
+          const { data: cachedData, timestamp } = JSON.parse(cached);
+          const isExpired = Date.now() - timestamp > CACHE_EXPIRY;
+          
+          if (cachedData) {
+            setData(cachedData);
+            // If cache is fresh, we can stop "initial" loading
+            if (!isExpired) {
+              setLoading(false);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load companies from cache:', e);
+      }
+    })();
+  }, []);
 
   const fetchCompanies = useCallback(async () => {
-    setLoading(true);
+    // Only show loading if we don't have ANY data yet
+    if (!data) setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (exchange) params.append('exchange', exchange);
-      params.append('limit', '5000');
+      params.append('limit', '5000'); // Maintain large limit for searchability
 
       const res = await fetchWithRetry(`${API_ENDPOINTS.companies}?${params.toString()}`);
-      const json = await res.json();
+      const json: CompaniesResponse = await res.json();
+      
       setData(json);
+      
+      // Update cache in background
+      if (!search && !exchange) {
+        AsyncStorage.setItem(COMPANIES_CACHE_KEY, JSON.stringify({
+          data: json,
+          timestamp: Date.now()
+        })).catch(() => {});
+      }
     } catch (err: any) {
-      setError(err.message || 'Network error');
+      // Don't show error if we have cached data, unless it's the first mount and it failed
+      if (!data) {
+        setError(err.message || 'Network error');
+      }
+      console.warn('Silent background sync failed:', err.message);
     } finally {
       setLoading(false);
     }
-  }, [search, exchange]);
+  }, [search, exchange, data]);
 
   useEffect(() => {
-    const timeout = setTimeout(fetchCompanies, 400); // debounce
+    // Skip the very first run since cache loader is handling the mount
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      // Triger background fetch on mount if no search
+      if (!search && !exchange) {
+        fetchCompanies();
+      }
+      return;
+    }
+
+    const timeout = setTimeout(fetchCompanies, search || exchange ? 400 : 0); // debounce for search, instant for mount/filters
     return () => clearTimeout(timeout);
-  }, [fetchCompanies]);
+  }, [fetchCompanies, search, exchange]);
 
   return {
     companies: data?.companies || [],

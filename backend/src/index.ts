@@ -4,6 +4,13 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { fetchNewsForCompany } from './services/aiNewsService';
+import { ClerkExpressRequireAuth, StrictAuthProp } from '@clerk/clerk-sdk-node';
+
+declare global {
+  namespace Express {
+    interface Request extends StrictAuthProp {}
+  }
+}
 
 dotenv.config();
 
@@ -17,6 +24,59 @@ const server = http.createServer(app);
 // Health check
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
+});
+
+// Watchlist endpoints (Protected)
+app.get('/api/watchlist', ClerkExpressRequireAuth({}) as unknown as express.RequestHandler, async (req: any, res) => {
+  try {
+    const userId = req.auth.userId;
+    await prisma.user.upsert({
+      where: { id: userId },
+      update: {},
+      create: { id: userId },
+    });
+
+    const watchlists = await prisma.userWatchlist.findMany({
+      where: { userId },
+      select: { companyId: true }
+    });
+    res.json({ watchlistIds: watchlists.map(w => w.companyId) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch watchlist' });
+  }
+});
+
+app.post('/api/watchlist/toggle', ClerkExpressRequireAuth({}) as unknown as express.RequestHandler, async (req: any, res) => {
+  try {
+    const { companyId } = req.body;
+    const userId = req.auth.userId;
+
+    await prisma.user.upsert({
+      where: { id: userId },
+      update: {},
+      create: { id: userId },
+    });
+
+    const existing = await prisma.userWatchlist.findUnique({
+      where: { userId_companyId: { userId, companyId } }
+    });
+
+    if (existing) {
+      await prisma.userWatchlist.delete({
+        where: { userId_companyId: { userId, companyId } }
+      });
+      res.json({ status: 'removed' });
+    } else {
+      await prisma.userWatchlist.create({
+        data: { userId, companyId }
+      });
+      res.json({ status: 'added' });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to toggle watchlist' });
+  }
 });
 
 // Search and filter companies
@@ -57,7 +117,7 @@ app.get('/api/companies/:id/news', async (req, res) => {
       res.status(404).json({ error: 'Not found' });
       return;
     }
-    const news = await fetchNewsForCompany(prisma, company.symbol, company.name);
+    const news = await fetchNewsForCompany(prisma, company.id, company.symbol, company.name);
     res.json(news);
   } catch (err) {
     console.error(err);
