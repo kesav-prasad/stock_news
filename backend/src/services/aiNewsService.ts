@@ -32,142 +32,118 @@ export async function fetchNewsForCompany(
     const CACHE_MS = CACHE_HOURS * 60 * 60 * 1000;
     const now = new Date();
     
-    // Serve from cache if valid
-    if (company.lastNewsFetch && now.getTime() - company.lastNewsFetch.getTime() < CACHE_MS) {
-      const cachedNews = await prisma.companyNews.findMany({
-        where: { companyId: company.id },
-        include: { news: true },
-        orderBy: { news: { publishedAt: 'desc' } },
-        take: 50,
-      });
-      return cachedNews.map((n) => n.news);
-    }
-
-    const cleanSymbol = symbol.split('.')[0];
-    const nameWords = name.split(' ').slice(0, 3).join(' '); // Use first 3 words of name for a broad search
-    const queries = [
-      `${name} India stock news when:2y`,
-      `${cleanSymbol} stock India news when:2y`,
-      `${nameWords} business news India`
-    ];
-
-    let feed = { items: [] as any[] };
-    let usedQuery = '';
-    
-    for (const q of queries) {
-      try {
-        const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-IN&gl=IN&ceid=IN:en`;
-        const result = await parser.parseURL(url);
-        if (result.items && result.items.length > 0) {
-          feed = result;
-          usedQuery = q;
-          break; // Found news, stop trying fallbacks
-        }
-      } catch (err) {
-        console.error(`Query failed for ${q}:`, err);
-      }
-    }
-
-    if (feed.items.length === 0) {
-      console.log(`No news found for ${name} [${symbol}] after trying ${queries.length} variants`);
-    } else if (usedQuery) {
-      console.log(`Matched news for ${name} using fallback: "${usedQuery}"`);
-    }
-
-    const topEntries = feed.items.slice(0, 50);
-
-    // Fetch existing news for this company to check for duplicates
+    // 1. Get existing news from DB immediately
     const existingLinks = await prisma.companyNews.findMany({
-      where: { companyId: company.id },
-      include: { news: true },
-    });
-    const existingTitles = existingLinks.map((en) => en.news.title);
-    const existingUrls = new Set(existingLinks.map((en) => en.news.url));
-
-    const newArticles: any[] = [];
-
-    for (const item of topEntries) {
-      if (!item.title || !item.link) continue;
-
-      // 1. Skip exact URL duplicate
-      if (existingUrls.has(item.link)) continue;
-
-      // 2. Skip if title is semantically too similar to any existing title (Jaccard > 0.6)
-      const isDuplicate = existingTitles.some(
-        (existing) => textSimilarity(existing, item.title!) > 0.6
-      );
-      if (isDuplicate) continue;
-
-      // 3. Also skip if too similar to another article in this batch
-      const batchDuplicate = newArticles.some(
-        (a) => textSimilarity(a.title, item.title!) > 0.6
-      );
-      if (batchDuplicate) continue;
-
-      const publishedAt = item.isoDate ? new Date(item.isoDate) : new Date();
-
-      // Extract source from title (Google News format: "Title - Source")
-      let source = 'Google News';
-      const dashIdx = item.title.lastIndexOf(' - ');
-      if (dashIdx !== -1) {
-        source = item.title.substring(dashIdx + 3).trim();
-      }
-
-      newArticles.push({
-        title: item.title,
-        link: item.link,
-        source,
-        publishedAt,
-      });
-    }
-
-    // Persist new unique articles
-    for (const article of newArticles) {
-      try {
-        const dbArticle = await prisma.newsArticle.upsert({
-          where: { url: article.link },
-          update: {},
-          create: {
-            title: article.title,
-            url: article.link,
-            source: article.source,
-            publishedAt: article.publishedAt,
-          },
-        });
-
-        await prisma.companyNews.upsert({
-          where: {
-            companyId_newsId: {
-              companyId: company.id,
-              newsId: dbArticle.id,
-            },
-          },
-          update: {},
-          create: {
-            companyId: company.id,
-            newsId: dbArticle.id,
-          },
-        });
-      } catch (error) {
-        console.error(`Error persisting article for ${symbol}:`, error);
-      }
-    }
-
-    // Update cache timestamp
-    await prisma.company.update({
-      where: { id: company.id },
-      data: { lastNewsFetch: now },
-    });
-
-    // Return all news for this company (latest first)
-    const allNews = await prisma.companyNews.findMany({
       where: { companyId: company.id },
       include: { news: true },
       orderBy: { news: { publishedAt: 'desc' } },
       take: 50,
     });
+    const currentNews = existingLinks.map((n) => n.news);
 
-    return allNews.map((n) => n.news);
+    // 2. Decide if we need to refresh (Stale-While-Revalidate)
+    const isStale = !company.lastNewsFetch || (now.getTime() - company.lastNewsFetch.getTime() > CACHE_MS);
+
+    if (isStale) {
+      // 3. Trigger background refresh (don't await it if we already have some news)
+      const refreshTask = (async () => {
+        try {
+          const cleanSymbol = symbol.split('.')[0];
+          const nameWords = name.split(' ').slice(0, 3).join(' ');
+          const queries = [
+            `${name} India stock news when:2y`,
+            `${cleanSymbol} stock India news when:2y`,
+            `${nameWords} business news India`
+          ];
+
+          // Fetch all queries in parallel for maximum speed
+          const results = await Promise.all(
+            queries.map(q => 
+              parser.parseURL(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-IN&gl=IN&ceid=IN:en`)
+                .catch(err => {
+                  console.error(`Query failed for ${q}:`, err.message);
+                  return { items: [] };
+                })
+            )
+          );
+
+          // Pick the best result (one with the most items)
+          const bestResult = results.reduce((prev, curr) => 
+            (curr.items.length > prev.items.length) ? curr : prev, { items: [] });
+
+          if (bestResult.items.length === 0) return;
+
+          const topEntries = bestResult.items.slice(0, 50);
+          const existingUrls = new Set(currentNews.map((n) => n.url));
+          const existingTitles = currentNews.map((n) => n.title);
+
+          const newArticles: any[] = [];
+          for (const item of topEntries) {
+            if (!item.title || !item.link || existingUrls.has(item.link)) continue;
+
+            // Optional: Skip similarity check if we already have plenty of news to speed up
+            if (newArticles.length + currentNews.length > 30) {
+              const isDuplicate = existingTitles.some(t => textSimilarity(t, item.title!) > 0.8);
+              if (isDuplicate) continue;
+            }
+
+            let source = 'Google News';
+            const dashIdx = item.title.lastIndexOf(' - ');
+            if (dashIdx !== -1) source = item.title.substring(dashIdx + 3).trim();
+
+            newArticles.push({
+              title: item.title,
+              url: item.link,
+              source,
+              publishedAt: item.isoDate ? new Date(item.isoDate) : new Date(),
+            });
+          }
+
+          // Persist new unique articles
+          for (const article of newArticles) {
+            const dbArticle = await prisma.newsArticle.upsert({
+              where: { url: article.url },
+              update: {},
+              create: article,
+            });
+
+            await prisma.companyNews.upsert({
+              where: { companyId_newsId: { companyId: company.id, newsId: dbArticle.id } },
+              update: {},
+              create: { companyId: company.id, newsId: dbArticle.id },
+            });
+          }
+
+          await prisma.company.update({
+            where: { id: company.id },
+            data: { lastNewsFetch: new Date() },
+          });
+          
+          console.log(`Background refresh complete for ${name}: found ${newArticles.length} new articles`);
+        } catch (e) {
+          console.error(`Background refresh failed for ${name}:`, e);
+        }
+      });
+
+      if (currentNews.length > 0) {
+        // We have old news, return it now and refresh in background
+        refreshTask();
+        return currentNews;
+      } else {
+        // No news at all, must wait for the first fetch
+        await refreshTask();
+        // Fetch again to get the newly persisted items
+        const freshLinks = await prisma.companyNews.findMany({
+          where: { companyId: company.id },
+          include: { news: true },
+          orderBy: { news: { publishedAt: 'desc' } },
+          take: 50,
+        });
+        return freshLinks.map(n => n.news);
+      }
+    }
+
+    return currentNews;
   } catch (error) {
     console.error(`Error fetching news for ${symbol}:`, error);
     return [];
