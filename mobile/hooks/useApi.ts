@@ -59,7 +59,8 @@ async function fetchWithRetry(url: string, maxRetries = 3, timeoutMs = 45000): P
 }
 
 export function useCompanies(search: string, exchange: string) {
-  const [data, setData] = useState<CompaniesResponse | null>(null);
+  const [fullData, setFullData] = useState<CompaniesResponse | null>(null);
+  const [searchResults, setSearchResults] = useState<CompaniesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isFirstMount = useRef(true);
@@ -72,7 +73,7 @@ export function useCompanies(search: string, exchange: string) {
         if (cached) {
           const { data: cachedData } = JSON.parse(cached);
           if (cachedData) {
-            setData(cachedData);
+            setFullData(cachedData);
             setLoading(false);
           }
         }
@@ -82,18 +83,16 @@ export function useCompanies(search: string, exchange: string) {
     })();
   }, []);
 
-  // 2. Compute locally filtered results for INSTANT UI updates
-  const filteredData = useMemo(() => {
-    if (!data?.companies) return { companies: [], total: 0 };
+  // 2. Compute locally filtered results for INSTANT UI updates from master list
+  const locallyFiltered = useMemo(() => {
+    if (!fullData?.companies) return { companies: [], total: 0 };
     
-    let filtered = data.companies;
+    let filtered = fullData.companies;
     
-    // Filter by exchange first
     if (exchange) {
       filtered = filtered.filter(c => c.exchange.toUpperCase() === exchange.toUpperCase());
     }
     
-    // Filter by search term
     if (search.trim()) {
       const term = search.toLowerCase();
       filtered = filtered.filter(c => 
@@ -106,11 +105,13 @@ export function useCompanies(search: string, exchange: string) {
       companies: filtered,
       total: filtered.length
     };
-  }, [data, search, exchange]);
+  }, [fullData, search, exchange]);
 
   const fetchCompanies = useCallback(async () => {
-    // Only show loading if we don't have ANY data yet for this specific search
-    if (filteredData.companies.length === 0) setLoading(true);
+    // Only show loading if we have NO results for the current search/filter
+    const hasLocalResults = locallyFiltered.companies.length > 0;
+    if (!hasLocalResults) setLoading(true);
+    
     setError(null);
     try {
       const params = new URLSearchParams();
@@ -121,30 +122,23 @@ export function useCompanies(search: string, exchange: string) {
       const res = await fetchWithRetry(`${API_ENDPOINTS.companies}?${params.toString()}`);
       const json: CompaniesResponse = await res.json();
       
-      // If this is a general fetch (no filters), update the main cache
       if (!search && !exchange) {
-        setData(json);
+        setFullData(json);
         AsyncStorage.setItem(COMPANIES_CACHE_KEY, JSON.stringify({
           data: json,
           timestamp: Date.now()
         })).catch(() => {});
       } else {
-        // For specific searches, we still update the UI with fresh results
-        // but we don't overwrite the global "full list" cache
-        setData(prev => {
-           if (!search && !exchange) return json;
-           // If we're searching, just merge/update what we have
-           return { ...json }; 
-        });
+        setSearchResults(json);
       }
     } catch (err: any) {
-      if (filteredData.companies.length === 0) {
+      if (!hasLocalResults) {
         setError(err.message || 'Network error');
       }
     } finally {
       setLoading(false);
     }
-  }, [search, exchange, filteredData.companies.length]);
+  }, [search, exchange, locallyFiltered.companies.length]); // Use length to stabilize dependency
 
   useEffect(() => {
     if (isFirstMount.current) {
@@ -157,9 +151,14 @@ export function useCompanies(search: string, exchange: string) {
     return () => clearTimeout(timeout);
   }, [fetchCompanies, search, exchange]);
 
+  // Priority: 1. Search Results (API) > 2. Local Filter (from Master) > 3. Master List
+  const displayData = (search || exchange) 
+    ? (searchResults || locallyFiltered) 
+    : (fullData || locallyFiltered);
+
   return {
-    companies: filteredData.companies,
-    total: search || exchange ? filteredData.total : (data?.total || filteredData.total),
+    companies: displayData.companies,
+    total: displayData.total,
     loading,
     error,
     refetch: fetchCompanies,

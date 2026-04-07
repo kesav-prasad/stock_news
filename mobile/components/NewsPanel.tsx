@@ -16,6 +16,7 @@ import { useCompanyNews, NewsArticle, API_ENDPOINTS } from '@/hooks/useApi';
 
 interface NewsPanelProps {
   companyId: string;
+  hideHeader?: boolean;
 }
 
 function NewsItem({ article, colors }: { article: NewsArticle; colors: typeof Colors.light }) {
@@ -54,7 +55,7 @@ function NewsItem({ article, colors }: { article: NewsArticle; colors: typeof Co
   );
 }
 
-export default function NewsPanel({ companyId }: NewsPanelProps) {
+export default function NewsPanel({ companyId, hideHeader }: NewsPanelProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { news, loading, error, refetch } = useCompanyNews(companyId);
@@ -62,13 +63,15 @@ export default function NewsPanel({ companyId }: NewsPanelProps) {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.panelHeader}>
-        <View style={styles.headerLeft}>
-          <View style={[styles.pulseDot, { backgroundColor: colors.primary }]} />
-          <Text style={[styles.panelTitle, { color: colors.text }]}>Latest News</Text>
+      {!hideHeader && (
+        <View style={styles.panelHeader}>
+          <View style={styles.headerLeft}>
+            <View style={[styles.pulseDot, { backgroundColor: colors.primary }]} />
+            <Text style={[styles.panelTitle, { color: colors.text }]}>Latest News</Text>
+          </View>
+          <Text style={[styles.headerHint, { color: colors.textTertiary }]}>No duplicates</Text>
         </View>
-        <Text style={[styles.headerHint, { color: colors.textTertiary }]}>No duplicates</Text>
-      </View>
+      )}
 
       {/* Content */}
       {loading ? (

@@ -44,13 +44,15 @@ export async function fetchNewsForCompany(
     }
 
     const cleanSymbol = symbol.split('.')[0];
+    const nameWords = name.split(' ').slice(0, 3).join(' '); // Use first 3 words of name for a broad search
     const queries = [
-      `${name} stock India when:2y`,
-      `${cleanSymbol} stock news India when:2y`,
-      `${name} India news`
+      `${name} India stock news when:2y`,
+      `${cleanSymbol} stock India news when:2y`,
+      `${nameWords} business news India`
     ];
 
     let feed = { items: [] as any[] };
+    let usedQuery = '';
     
     for (const q of queries) {
       try {
@@ -58,11 +60,18 @@ export async function fetchNewsForCompany(
         const result = await parser.parseURL(url);
         if (result.items && result.items.length > 0) {
           feed = result;
+          usedQuery = q;
           break; // Found news, stop trying fallbacks
         }
       } catch (err) {
         console.error(`Query failed for ${q}:`, err);
       }
+    }
+
+    if (feed.items.length === 0) {
+      console.log(`No news found for ${name} [${symbol}] after trying ${queries.length} variants`);
+    } else if (usedQuery) {
+      console.log(`Matched news for ${name} using fallback: "${usedQuery}"`);
     }
 
     const topEntries = feed.items.slice(0, 50);

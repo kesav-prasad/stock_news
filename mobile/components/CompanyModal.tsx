@@ -84,7 +84,8 @@ export default function CompanyModal({
           styles.modalContent,
           {
             backgroundColor: colors.surface,
-            maxHeight: SCREEN_HEIGHT * 0.85,
+            height: SCREEN_HEIGHT * 0.8,
+            flexDirection: 'column',
           },
         ]}
       >
@@ -147,12 +148,20 @@ export default function CompanyModal({
         </View>
 
         {/* News Content */}
+        <View style={[styles.newsSectionHeader, { borderTopColor: colors.borderLight }]}>
+          <View style={styles.headerLeft}>
+            <View style={[styles.pulseDot, { backgroundColor: colors.primary }]} />
+            <Text style={[styles.panelTitle, { color: colors.text }]}>Latest News</Text>
+          </View>
+        </View>
+
         <ScrollView
           style={styles.scrollContent}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
           bounces={true}
         >
-          <NewsPanel companyId={company.id} />
+          <NewsPanel companyId={company.id} hideHeader />
         </ScrollView>
       </Animated.View>
     </View>
@@ -238,5 +247,26 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flex: 1,
+  },
+  newsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.lg,
+    borderTopWidth: 1,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  panelTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: '700',
   },
 });
