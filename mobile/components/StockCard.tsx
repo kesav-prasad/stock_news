@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import {
   View,
   Text,
@@ -34,7 +34,7 @@ interface StockCardProps {
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export default function StockCard({
+function StockCard({
   company,
   onPress,
   isWatchlisted,
@@ -223,3 +223,5 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+
+export default memo(StockCard);

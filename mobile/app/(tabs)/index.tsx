@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useCallback, useDeferredValue } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,11 @@ import {
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
-  Dimensions,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
-import Animated, { FadeIn } from 'react-native-reanimated';
 import { Colors, Spacing, Radius, FontSize } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useCompanies, Company } from '@/hooks/useApi';
@@ -33,7 +31,10 @@ export default function DashboardScreen() {
   const [exchange, setExchange] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
 
-  const { companies, total, loading, error, refetch } = useCompanies(searchTerm, exchange);
+  // useDeferredValue ensures typing is always prioritized over list rendering
+  const deferredSearch = useDeferredValue(searchTerm);
+
+  const { companies, total, loading, loadingMore, error, refetch, loadMore } = useCompanies(deferredSearch, exchange);
   const { toggleWatchlist, isInWatchlist } = useSharedWatchlist();
 
   // Determine number of columns based on screen width
@@ -52,6 +53,15 @@ export default function DashboardScreen() {
     ),
     [numColumns, isInWatchlist, toggleWatchlist]
   );
+
+  const renderFooter = useCallback(() => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color={colors.primary} />
+      </View>
+    );
+  }, [loadingMore, colors.primary]);
 
   const keyExtractor = useCallback((item: Company) => item.id, []);
 
@@ -145,7 +155,7 @@ export default function DashboardScreen() {
             Loading companies...
           </Text>
         </View>
-      ) : error ? (
+      ) : error && companies.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="cloud-offline-outline" size={48} color={colors.red} />
           <Text style={[styles.errorTitle, { color: colors.text }]}>Waking Up Server</Text>
@@ -167,7 +177,10 @@ export default function DashboardScreen() {
             renderItem={renderItem}
             keyExtractor={keyExtractor}
             numColumns={numColumns}
-            estimatedItemSize={150}
+            estimatedItemSize={120}
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={renderFooter}
             contentContainerStyle={[
               styles.listContent,
               { paddingBottom: insets.bottom + 80 },
@@ -175,7 +188,7 @@ export default function DashboardScreen() {
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
-                refreshing={loading}
+                refreshing={loading && companies.length > 0}
                 onRefresh={refetch}
                 tintColor={colors.primary}
                 colors={[colors.primary]}
@@ -316,5 +329,10 @@ const styles = StyleSheet.create({
   },
   cardWrapper: {
     padding: Spacing.xs,
+  },
+  footerLoader: {
+    paddingVertical: Spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

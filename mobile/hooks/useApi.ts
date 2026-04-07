@@ -59,109 +59,97 @@ async function fetchWithRetry(url: string, maxRetries = 3, timeoutMs = 45000): P
 }
 
 export function useCompanies(search: string, exchange: string) {
-  const [fullData, setFullData] = useState<CompaniesResponse | null>(null);
-  const [searchResults, setSearchResults] = useState<CompaniesResponse | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isFirstMount = useRef(true);
 
-  // 1. Load from cache on mount
-  useEffect(() => {
-    (async () => {
-      try {
-        const cached = await AsyncStorage.getItem(COMPANIES_CACHE_KEY);
-        if (cached) {
-          const { data: cachedData } = JSON.parse(cached);
-          if (cachedData) {
-            setFullData(cachedData);
-            setLoading(false);
-          }
-        }
-      } catch (e) {
-        console.warn('Failed to load companies from cache:', e);
-      }
-    })();
-  }, []);
-
-  // 2. Compute locally filtered results for INSTANT UI updates from master list
-  const locallyFiltered = useMemo(() => {
-    if (!fullData?.companies) return { companies: [], total: 0 };
-    
-    let filtered = fullData.companies;
-    
-    if (exchange) {
-      filtered = filtered.filter(c => c.exchange.toUpperCase() === exchange.toUpperCase());
+  const fetchCompanies = useCallback(async (pageNum: number, isNewSearch: boolean) => {
+    if (isNewSearch) {
+      setLoading(true);
+      setPage(1);
+    } else {
+      setLoadingMore(true);
     }
-    
-    if (search.trim()) {
-      const term = search.toLowerCase();
-      filtered = filtered.filter(c => 
-        c.name.toLowerCase().includes(term) || 
-        c.symbol.toLowerCase().includes(term)
-      );
-    }
-    
-    return {
-      companies: filtered,
-      total: filtered.length
-    };
-  }, [fullData, search, exchange]);
-
-  const fetchCompanies = useCallback(async () => {
-    // Only show loading if we have NO results for the current search/filter
-    const hasLocalResults = locallyFiltered.companies.length > 0;
-    if (!hasLocalResults) setLoading(true);
-    
     setError(null);
+
     try {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (exchange) params.append('exchange', exchange);
-      params.append('limit', '5000');
+      params.append('page', pageNum.toString());
+      params.append('limit', '40'); // Fetch 40 at a time for efficiency
 
       const res = await fetchWithRetry(`${API_ENDPOINTS.companies}?${params.toString()}`);
       const json: CompaniesResponse = await res.json();
       
-      if (!search && !exchange) {
-        setFullData(json);
+      setCompanies(prev => isNewSearch ? json.companies : [...prev, ...json.companies]);
+      setTotal(json.total);
+      
+      // Cache the first page of the "all" view for instant startup
+      if (!search && !exchange && pageNum === 1) {
         AsyncStorage.setItem(COMPANIES_CACHE_KEY, JSON.stringify({
           data: json,
           timestamp: Date.now()
         })).catch(() => {});
-      } else {
-        setSearchResults(json);
       }
     } catch (err: any) {
-      if (!hasLocalResults) {
-        setError(err.message || 'Network error');
-      }
+      setError(err.message || 'Network error');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [search, exchange, locallyFiltered.companies.length]); // Use length to stabilize dependency
+  }, [search, exchange]);
 
+  // Load cache on mount ONLY if no search is active
+  useEffect(() => {
+    if (!search && !exchange) {
+      (async () => {
+        try {
+          const cached = await AsyncStorage.getItem(COMPANIES_CACHE_KEY);
+          if (cached) {
+            const { data: cachedData } = JSON.parse(cached);
+            if (cachedData && cachedData.companies) {
+              setCompanies(cachedData.companies);
+              setTotal(cachedData.total);
+              setLoading(false);
+            }
+          }
+        } catch (e) {}
+      })();
+    }
+  }, []);
+
+  // Handle search/filter changes
   useEffect(() => {
     if (isFirstMount.current) {
       isFirstMount.current = false;
-      fetchCompanies();
+      fetchCompanies(1, true);
       return;
     }
 
-    const timeout = setTimeout(fetchCompanies, search || exchange ? 500 : 0);
+    const timeout = setTimeout(() => fetchCompanies(1, true), 400); // 400ms debounce
     return () => clearTimeout(timeout);
-  }, [fetchCompanies, search, exchange]);
+  }, [search, exchange]);
 
-  // Priority: 1. Search Results (API) > 2. Local Filter (from Master) > 3. Master List
-  const displayData = (search || exchange) 
-    ? (searchResults || locallyFiltered) 
-    : (fullData || locallyFiltered);
+  const loadMore = useCallback(() => {
+    if (loading || loadingMore || companies.length >= total) return;
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchCompanies(nextPage, false);
+  }, [loading, loadingMore, companies.length, total, page, fetchCompanies]);
 
   return {
-    companies: displayData.companies,
-    total: displayData.total,
+    companies,
+    total,
     loading,
+    loadingMore,
     error,
-    refetch: fetchCompanies,
+    refetch: () => fetchCompanies(1, true),
+    loadMore,
   };
 }
 
