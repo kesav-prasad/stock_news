@@ -11,17 +11,22 @@ datasource db {
 }
 
 model Company {
-  id          String   @id @default(uuid())
-  symbol      String   @unique // e.g., RELIANCE.NS, TCS.BO
-  name        String
-  exchange    String   // NSE or BSE
-  sector      String?
-  industry    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(uuid())
+  symbol        String   @unique // e.g., RELIANCE.NS, TCS.BO
+  name          String
+  exchange      String   // NSE or BSE
+  sector        String?
+  industry      String?
+  lastNewsFetch DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  stockPrices StockPrice[]
-  news        CompanyNews[]
+  stockPrices   StockPrice[]
+  news          CompanyNews[]
+  watchlistedBy UserWatchlist[]
+
+  @@index([name])
+  @@index([exchange])
 }
 
 model StockPrice {
@@ -62,4 +67,22 @@ model CompanyNews {
   news      NewsArticle @relation(fields: [newsId], references: [id], onDelete: Cascade)
 
   @@id([companyId, newsId])
+}
+
+model User {
+  id        String   @id // Clerk user ID
+  createdAt DateTime @default(now())
+
+  watchlists UserWatchlist[]
+}
+
+model UserWatchlist {
+  userId    String
+  companyId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, companyId])
 }

@@ -7,6 +7,7 @@ import { Search, BarChart3, SlidersHorizontal, Heart, Star, Trash2 } from 'lucid
 import StockGrid from '@/components/StockGrid';
 import CompanyModal from '@/components/CompanyModal';
 import { useWatchlist } from '@/hooks/useWatchlist';
+import { SignInButton, UserButton, useUser } from '@clerk/nextjs';
 
 interface Company {
   id: string;
@@ -42,6 +43,8 @@ export default function DashboardPage() {
     hydrated,
   } = useWatchlist();
 
+  const { isSignedIn } = useUser();
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['companies'],
     queryFn: async () => {
@@ -50,6 +53,8 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error('Network response was not ok');
       return res.json();
     },
+    retry: 5,
+    retryDelay: (attemptIndex) => Math.min(2000 * 2 ** attemptIndex, 30000),
     staleTime: Infinity,
   });
 
@@ -143,6 +148,21 @@ export default function DashboardPage() {
             </select>
 
             <ThemeToggle />
+
+            {/* Clerk Auth UI */}
+            <div className="flex items-center ml-1 sm:ml-2 border-l border-gray-200 dark:border-gray-800 pl-3 sm:pl-4">
+              {!isSignedIn ? (
+                <SignInButton mode="modal">
+                  <button className="text-xs sm:text-sm font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl shadow-sm hover:shadow transition-all whitespace-nowrap">
+                    Sign In
+                  </button>
+                </SignInButton>
+              ) : (
+                <div className="flex items-center justify-center p-0.5 rounded-full bg-gray-100 dark:bg-gray-800 ring-2 ring-white dark:ring-gray-950">
+                  <UserButton />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Tab bar + mobile filters */}

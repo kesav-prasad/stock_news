@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { API_ENDPOINTS } from '@/constants/api';
+export { API_ENDPOINTS };
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const COMPANIES_CACHE_KEY = 'stocknews-companies-cache';
@@ -59,7 +60,7 @@ async function fetchWithRetry(url: string, maxRetries = 3, timeoutMs = 45000): P
 
 export function useCompanies(search: string, exchange: string) {
   const [data, setData] = useState<CompaniesResponse | null>(null);
-  const [loading, setLoading] = useState(true); // default to true if no cache
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isFirstMount = useRef(true);
 
@@ -69,15 +70,10 @@ export function useCompanies(search: string, exchange: string) {
       try {
         const cached = await AsyncStorage.getItem(COMPANIES_CACHE_KEY);
         if (cached) {
-          const { data: cachedData, timestamp } = JSON.parse(cached);
-          const isExpired = Date.now() - timestamp > CACHE_EXPIRY;
-          
+          const { data: cachedData } = JSON.parse(cached);
           if (cachedData) {
             setData(cachedData);
-            // If cache is fresh, we can stop "initial" loading
-            if (!isExpired) {
-              setLoading(false);
-            }
+            setLoading(false);
           }
         }
       } catch (e) {
@@ -86,57 +82,84 @@ export function useCompanies(search: string, exchange: string) {
     })();
   }, []);
 
+  // 2. Compute locally filtered results for INSTANT UI updates
+  const filteredData = useMemo(() => {
+    if (!data?.companies) return { companies: [], total: 0 };
+    
+    let filtered = data.companies;
+    
+    // Filter by exchange first
+    if (exchange) {
+      filtered = filtered.filter(c => c.exchange.toUpperCase() === exchange.toUpperCase());
+    }
+    
+    // Filter by search term
+    if (search.trim()) {
+      const term = search.toLowerCase();
+      filtered = filtered.filter(c => 
+        c.name.toLowerCase().includes(term) || 
+        c.symbol.toLowerCase().includes(term)
+      );
+    }
+    
+    return {
+      companies: filtered,
+      total: filtered.length
+    };
+  }, [data, search, exchange]);
+
   const fetchCompanies = useCallback(async () => {
-    // Only show loading if we don't have ANY data yet
-    if (!data) setLoading(true);
+    // Only show loading if we don't have ANY data yet for this specific search
+    if (filteredData.companies.length === 0) setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (exchange) params.append('exchange', exchange);
-      params.append('limit', '5000'); // Maintain large limit for searchability
+      params.append('limit', '5000');
 
       const res = await fetchWithRetry(`${API_ENDPOINTS.companies}?${params.toString()}`);
       const json: CompaniesResponse = await res.json();
       
-      setData(json);
-      
-      // Update cache in background
+      // If this is a general fetch (no filters), update the main cache
       if (!search && !exchange) {
+        setData(json);
         AsyncStorage.setItem(COMPANIES_CACHE_KEY, JSON.stringify({
           data: json,
           timestamp: Date.now()
         })).catch(() => {});
+      } else {
+        // For specific searches, we still update the UI with fresh results
+        // but we don't overwrite the global "full list" cache
+        setData(prev => {
+           if (!search && !exchange) return json;
+           // If we're searching, just merge/update what we have
+           return { ...json }; 
+        });
       }
     } catch (err: any) {
-      // Don't show error if we have cached data, unless it's the first mount and it failed
-      if (!data) {
+      if (filteredData.companies.length === 0) {
         setError(err.message || 'Network error');
       }
-      console.warn('Silent background sync failed:', err.message);
     } finally {
       setLoading(false);
     }
-  }, [search, exchange, data]);
+  }, [search, exchange, filteredData.companies.length]);
 
   useEffect(() => {
-    // Skip the very first run since cache loader is handling the mount
     if (isFirstMount.current) {
       isFirstMount.current = false;
-      // Triger background fetch on mount if no search
-      if (!search && !exchange) {
-        fetchCompanies();
-      }
+      fetchCompanies();
       return;
     }
 
-    const timeout = setTimeout(fetchCompanies, search || exchange ? 400 : 0); // debounce for search, instant for mount/filters
+    const timeout = setTimeout(fetchCompanies, search || exchange ? 500 : 0);
     return () => clearTimeout(timeout);
   }, [fetchCompanies, search, exchange]);
 
   return {
-    companies: data?.companies || [],
-    total: data?.total || 0,
+    companies: filteredData.companies,
+    total: search || exchange ? filteredData.total : (data?.total || filteredData.total),
     loading,
     error,
     refetch: fetchCompanies,
@@ -148,31 +171,27 @@ export function useCompanyNews(companyId: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchNews = useCallback(async () => {
     if (!companyId) {
       setNews([]);
       return;
     }
-
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetchWithRetry(API_ENDPOINTS.companyNews(companyId));
-        const json = await res.json();
-        if (!cancelled) setNews(json);
-      } catch (err: any) {
-        if (!cancelled) setError(err.message || 'Failed to load news');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchWithRetry(API_ENDPOINTS.companyNews(companyId));
+      const json = await res.json();
+      setNews(json);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load news');
+    } finally {
+      setLoading(false);
+    }
   }, [companyId]);
 
-  return { news, loading, error };
+  useEffect(() => {
+    fetchNews();
+  }, [fetchNews]);
+
+  return { news, loading, error, refetch: fetchNews };
 }

@@ -1,72 +1,82 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@clerk/nextjs';
 
-const STORAGE_KEY = 'stocknews-watchlist';
-
-/**
- * Custom hook for managing a watchlist persisted in localStorage.
- * SSR-safe — reads from storage only after mount.
- */
 export function useWatchlist() {
-  const [watchlistIds, setWatchlistIds] = useState<Set<string>>(new Set());
-  const [hydrated, setHydrated] = useState(false);
+  const { getToken, isSignedIn } = useAuth();
+  const queryClient = useQueryClient();
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-  // Hydrate from localStorage on mount
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          setWatchlistIds(new Set(parsed));
+  const { data: watchlistData, isSuccess } = useQuery({
+    queryKey: ['watchlist', isSignedIn],
+    queryFn: async () => {
+      if (!isSignedIn) return { watchlistIds: [] };
+      const token = await getToken();
+      if (!token) return { watchlistIds: [] };
+
+      const res = await fetch(`${baseUrl}/api/watchlist`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch watchlist');
+      return res.json();
+    },
+    enabled: true,
+  });
+
+  const watchlistIds = useMemo(() => {
+    return new Set<string>(watchlistData?.watchlistIds || []);
+  }, [watchlistData]);
+
+  const toggleMutation = useMutation({
+    mutationFn: async (companyId: string) => {
+      if (!isSignedIn) return;
+      const token = await getToken();
+      const res = await fetch(`${baseUrl}/api/watchlist/toggle`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({ companyId })
+      });
+      if (!res.ok) throw new Error('Failed to toggle watchlist');
+    },
+    onMutate: async (companyId: string) => {
+      await queryClient.cancelQueries({ queryKey: ['watchlist'] });
+      const previous = queryClient.getQueryData(['watchlist', isSignedIn]);
+
+      queryClient.setQueryData(['watchlist', isSignedIn], (old: any) => {
+        if (!old) return { watchlistIds: [companyId] };
+        const ids = new Set(old.watchlistIds);
+        if (ids.has(companyId)) {
+          ids.delete(companyId);
+        } else {
+          ids.add(companyId);
         }
-      }
-    } catch {
-      // Corrupted data — start fresh
-    }
-    setHydrated(true);
-  }, []);
+        return { watchlistIds: Array.from(ids) };
+      });
 
-  // Persist to localStorage whenever watchlistIds changes (after hydration)
-  useEffect(() => {
-    if (!hydrated) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...watchlistIds]));
-    } catch {
-      // Storage full or unavailable — fail silently
-    }
-  }, [watchlistIds, hydrated]);
-
-  // Listen for changes from other tabs
-  useEffect(() => {
-    function handleStorageChange(e: StorageEvent) {
-      if (e.key === STORAGE_KEY && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue);
-          if (Array.isArray(parsed)) {
-            setWatchlistIds(new Set(parsed));
-          }
-        } catch {
-          // Ignore invalid data
-        }
+      return { previous };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['watchlist', isSignedIn], context.previous);
       }
-    }
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
+    },
+  });
 
   const toggleWatchlist = useCallback((companyId: string) => {
-    setWatchlistIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(companyId)) {
-        next.delete(companyId);
-      } else {
-        next.add(companyId);
-      }
-      return next;
-    });
-  }, []);
+    if (!isSignedIn) {
+      alert("Please sign in to add companies to your watchlist.");
+      return;
+    }
+    toggleMutation.mutate(companyId);
+  }, [isSignedIn, toggleMutation]);
 
   const isInWatchlist = useCallback(
     (companyId: string) => watchlistIds.has(companyId),
@@ -76,7 +86,7 @@ export function useWatchlist() {
   const watchlistCount = useMemo(() => watchlistIds.size, [watchlistIds]);
 
   const clearWatchlist = useCallback(() => {
-    setWatchlistIds(new Set());
+    console.warn("Clear watchlist is not supported via cloud sync yet.");
   }, []);
 
   return {
@@ -85,6 +95,6 @@ export function useWatchlist() {
     isInWatchlist,
     watchlistCount,
     clearWatchlist,
-    hydrated,
+    hydrated: isSuccess || !isSignedIn,
   };
 }

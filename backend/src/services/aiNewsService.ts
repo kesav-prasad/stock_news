@@ -43,10 +43,27 @@ export async function fetchNewsForCompany(
       return cachedNews.map((n) => n.news);
     }
 
-    const query = encodeURIComponent(`${name} stock India when:2y`);
-    const feed = await parser.parseURL(
-      `https://news.google.com/rss/search?q=${query}&hl=en-IN&gl=IN&ceid=IN:en`
-    );
+    const cleanSymbol = symbol.split('.')[0];
+    const queries = [
+      `${name} stock India when:2y`,
+      `${cleanSymbol} stock news India when:2y`,
+      `${name} India news`
+    ];
+
+    let feed = { items: [] as any[] };
+    
+    for (const q of queries) {
+      try {
+        const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-IN&gl=IN&ceid=IN:en`;
+        const result = await parser.parseURL(url);
+        if (result.items && result.items.length > 0) {
+          feed = result;
+          break; // Found news, stop trying fallbacks
+        }
+      } catch (err) {
+        console.error(`Query failed for ${q}:`, err);
+      }
+    }
 
     const topEntries = feed.items.slice(0, 50);
 

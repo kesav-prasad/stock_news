@@ -12,7 +12,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useCompanyNews, NewsArticle } from '@/hooks/useApi';
+import { useCompanyNews, NewsArticle, API_ENDPOINTS } from '@/hooks/useApi';
 
 interface NewsPanelProps {
   companyId: string;
@@ -57,7 +57,7 @@ function NewsItem({ article, colors }: { article: NewsArticle; colors: typeof Co
 export default function NewsPanel({ companyId }: NewsPanelProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
-  const { news, loading, error } = useCompanyNews(companyId);
+  const { news, loading, error, refetch } = useCompanyNews(companyId);
 
   return (
     <View style={styles.container}>
@@ -79,11 +79,18 @@ export default function NewsPanel({ companyId }: NewsPanelProps) {
         <View style={styles.centerContainer}>
           <Ionicons name="cloud-offline-outline" size={32} color={colors.red} />
           <Text style={[styles.errorText, { color: colors.red }]}>
-            Failed to load news
+            Connection Error
           </Text>
-          <Text style={[styles.errorHint, { color: colors.textSecondary }]}>
-            Is the backend running?
+          <Text style={[styles.errorHint, { color: colors.textSecondary, textAlign: 'center' }]}>
+            Could not reach {API_ENDPOINTS.health.replace('/api/health', '')}.{"\n"}
+            Check if your phone is on the same WiFi as your Mac.
           </Text>
+          <TouchableOpacity 
+            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            onPress={refetch}
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       ) : news.length > 0 ? (
         <View style={styles.newsList}>
@@ -191,5 +198,16 @@ const styles = StyleSheet.create({
   readMoreText: {
     fontSize: FontSize.xs,
     fontWeight: '500',
+  },
+  retryButton: {
+    marginTop: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.full,
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: FontSize.sm,
+    fontWeight: '600',
   },
 });

@@ -20,7 +20,8 @@ export default function ExpandablePanel({ company }: PanelProps) {
   const { data: chartData, isLoading: isChartLoading } = useQuery({
     queryKey: ['historical', company.id, period],
     queryFn: async () => {
-      const res = await fetch(`http://localhost:4000/api/companies/${company.id}/historical?period=${period}`);
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const res = await fetch(`${baseUrl}/api/companies/${company.id}/historical?period=${period}`);
       if (!res.ok) throw new Error('Failed to fetch chart data');
       return res.json();
     }
@@ -29,7 +30,8 @@ export default function ExpandablePanel({ company }: PanelProps) {
   const { data: newsItems, isLoading: isNewsLoading } = useQuery({
     queryKey: ['news', company.id],
     queryFn: async () => {
-      const res = await fetch(`http://localhost:4000/api/companies/${company.id}/news`);
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const res = await fetch(`${baseUrl}/api/companies/${company.id}/news`);
       if (!res.ok) throw new Error('Failed to fetch news');
       return res.json();
     }

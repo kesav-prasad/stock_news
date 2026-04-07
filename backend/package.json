@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/index.ts",
-    "start": "npx prisma generate && npx prisma db push --accept-data-loss && npm run seed && ts-node src/index.ts",
+    "start": "ts-node src/index.ts",
+    "setup": "npx prisma generate && npx prisma db push --accept-data-loss && npm run seed",
     "seed": "ts-node src/scripts/seedCompanies.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -13,6 +14,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@clerk/clerk-sdk-node": "^4.13.23",
     "@prisma/client": "^5.22.0",
     "cors": "^2.8.6",
     "csv-parser": "^3.2.0",
