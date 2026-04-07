@@ -45,33 +45,36 @@ export async function fetchNewsForCompany(
     const isStale = !company.lastNewsFetch || (now.getTime() - company.lastNewsFetch.getTime() > CACHE_MS);
 
     if (isStale) {
-      // 3. Trigger background refresh (don't await it if we already have some news)
+      // 3. Trigger background refresh
       const refreshTask = (async () => {
         try {
           const cleanSymbol = symbol.split('.')[0];
           const nameWords = name.split(' ').slice(0, 3).join(' ');
           const queries = [
-            `${name} India stock news when:2y`,
+            `"${name}" India stock news when:2y`,
             `${cleanSymbol} stock India news when:2y`,
-            `${nameWords} business news India`
+            `"${nameWords}" stock business news India when:2y`
           ];
 
-          // Fetch all queries in parallel for maximum speed
+          console.log(`[Scraper] Starting parallel fetch for ${name} [${symbol}]...`);
+
           const results = await Promise.all(
             queries.map(q => 
               parser.parseURL(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-IN&gl=IN&ceid=IN:en`)
                 .catch(err => {
-                  console.error(`Query failed for ${q}:`, err.message);
+                  console.error(`[Scraper] Query failed for "${q}":`, err.message);
                   return { items: [] };
                 })
             )
           );
 
-          // Pick the best result (one with the most items)
           const bestResult = results.reduce((prev, curr) => 
             (curr.items.length > prev.items.length) ? curr : prev, { items: [] });
 
-          if (bestResult.items.length === 0) return;
+          if (bestResult.items.length === 0) {
+            console.log(`[Scraper] No news found for ${name} after trying all variants.`);
+            return;
+          }
 
           const topEntries = bestResult.items.slice(0, 50);
           const existingUrls = new Set(currentNews.map((n) => n.url));
@@ -81,11 +84,8 @@ export async function fetchNewsForCompany(
           for (const item of topEntries) {
             if (!item.title || !item.link || existingUrls.has(item.link)) continue;
 
-            // Optional: Skip similarity check if we already have plenty of news to speed up
-            if (newArticles.length + currentNews.length > 30) {
-              const isDuplicate = existingTitles.some(t => textSimilarity(t, item.title!) > 0.8);
-              if (isDuplicate) continue;
-            }
+            const isDuplicate = existingTitles.some(t => textSimilarity(t, item.title!) > 0.8);
+            if (isDuplicate) continue;
 
             let source = 'Google News';
             const dashIdx = item.title.lastIndexOf(' - ');
@@ -99,7 +99,6 @@ export async function fetchNewsForCompany(
             });
           }
 
-          // Persist new unique articles
           for (const article of newArticles) {
             const dbArticle = await prisma.newsArticle.upsert({
               where: { url: article.url },
@@ -119,20 +118,17 @@ export async function fetchNewsForCompany(
             data: { lastNewsFetch: new Date() },
           });
           
-          console.log(`Background refresh complete for ${name}: found ${newArticles.length} new articles`);
+          console.log(`[Scraper] Refresh complete for ${name}: found ${newArticles.length} new articles.`);
         } catch (e) {
-          console.error(`Background refresh failed for ${name}:`, e);
+          console.error(`[Scraper] Critical failure for ${name}:`, e);
         }
       });
 
       if (currentNews.length > 0) {
-        // We have old news, return it now and refresh in background
         refreshTask();
         return currentNews;
       } else {
-        // No news at all, must wait for the first fetch
         await refreshTask();
-        // Fetch again to get the newly persisted items
         const freshLinks = await prisma.companyNews.findMany({
           where: { companyId: company.id },
           include: { news: true },
