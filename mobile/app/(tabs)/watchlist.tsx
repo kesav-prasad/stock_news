@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Colors, Spacing, Radius, FontSize } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useCompanies, Company } from '@/hooks/useApi';
+import { useCompaniesByIds, Company } from '@/hooks/useApi';
 import { useSharedWatchlist } from '@/contexts/WatchlistContext';
 import StockCard from '@/components/StockCard';
 import CompanyModal from '@/components/CompanyModal';
@@ -30,14 +30,16 @@ export default function WatchlistScreen() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
 
-  // Fetch all companies (no exchange filter for watchlist)
-  const { companies, loading, refetch } = useCompanies('', '');
   const { watchlistIds, toggleWatchlist, isInWatchlist, watchlistCount, clearWatchlist, hydrated } =
     useSharedWatchlist();
 
-  // Filter to only watchlisted companies
+  // Fetch only the watchlisted companies directly from the server
+  const watchlistIdsArray = useMemo(() => Array.from(watchlistIds), [watchlistIds]);
+  const { companies, loading, refetch } = useCompaniesByIds(watchlistIdsArray);
+
+  // Filter to search term if provided
   const watchlistCompanies = useMemo(() => {
-    let filtered = companies.filter((c) => watchlistIds.has(c.id));
+    let filtered = companies;
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(
@@ -47,7 +49,7 @@ export default function WatchlistScreen() {
       );
     }
     return filtered;
-  }, [companies, watchlistIds, searchTerm]);
+  }, [companies, searchTerm]);
 
   const numColumns = width > 600 ? 3 : width > 400 ? 2 : 1;
 

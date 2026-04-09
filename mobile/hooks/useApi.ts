@@ -153,6 +153,36 @@ export function useCompanies(search: string, exchange: string) {
   };
 }
 
+export function useCompaniesByIds(ids: string[]) {
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchCompanies = useCallback(async () => {
+    if (!ids || ids.length === 0) {
+      setCompanies([]);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchWithRetry(`${API_ENDPOINTS.companies}?ids=${ids.join(',')}&limit=5000`);
+      const json: CompaniesResponse = await res.json();
+      setCompanies(json.companies || []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch companies');
+    } finally {
+      setLoading(false);
+    }
+  }, [ids.join(',')]);
+
+  useEffect(() => {
+    fetchCompanies();
+  }, [fetchCompanies]);
+
+  return { companies, loading, error, refetch: fetchCompanies };
+}
+
 export function useCompanyNews(companyId: string | null) {
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(false);

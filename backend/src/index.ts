@@ -81,18 +81,25 @@ app.post('/api/watchlist/toggle', ClerkExpressRequireAuth({}) as unknown as expr
 
 // Search and filter companies
 app.get('/api/companies', async (req, res) => {
-  const { search, exchange, page = 1, limit = 100 } = req.query;
+  const { search, exchange, ids, page = 1, limit = 100 } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
 
   const where: any = {};
-  if (search) {
-    where.OR = [
-      { name: { contains: String(search) } },
-      { symbol: { contains: String(search) } },
-    ];
-  }
-  if (exchange) {
-    where.exchange = String(exchange).toUpperCase();
+  
+  if (ids) {
+    // If 'ids' is provided, we fetch exactly those companies
+    where.id = { in: String(ids).split(',') };
+  } else {
+    // Otherwise apply regular search filters
+    if (search) {
+      where.OR = [
+        { name: { contains: String(search) } },
+        { symbol: { contains: String(search) } },
+      ];
+    }
+    if (exchange) {
+      where.exchange = String(exchange).toUpperCase();
+    }
   }
 
   try {
