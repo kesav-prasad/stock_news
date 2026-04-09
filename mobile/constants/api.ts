@@ -8,8 +8,8 @@ const DEV_HOST = Platform.select({
   android: '10.158.151.245',  // Android emulator → host localhost
   default: 'localhost',
 });
-// For physical device, use your machine's network IP (from expo start logs)
-export const API_BASE_URL = 'http://10.0.1.69:4000';
+// For production, we point directly to the cloud backend
+export const API_BASE_URL = 'https://stocknews-backend.onrender.com';
 
 
 export const API_ENDPOINTS = {

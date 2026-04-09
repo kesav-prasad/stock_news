@@ -3,6 +3,9 @@ node_modules
 .env
 
 /generated/prisma
-dev.db
-dev.db-journal
 *.db
+*.sqlite
+*.sqlite-journal
+
+# ALOW the main dev.db to be tracked so Render has data immediately
+!prisma/dev.db

@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: stocknews-backend
+    runtime: node
+    rootDir: backend
+    # Simply generate Prisma client without a long-running seed
+    buildCommand: npm install && npx prisma generate
+    # Start the server using ts-node via the dev script (or prod if configured)
+    startCommand: npm run dev
+    envVars:
+      - key: DATABASE_URL
+        value: file:./prisma/dev.db
+      - key: NODE_ENV
+        value: production
