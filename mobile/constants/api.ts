@@ -9,7 +9,7 @@ const DEV_HOST = Platform.select({
   default: 'localhost',
 });
 // For physical device, use your machine's network IP (from expo start logs)
-export const API_BASE_URL = 'http://10.33.220.163:4000';
+export const API_BASE_URL = 'http://10.0.1.69:4000';
 
 
 export const API_ENDPOINTS = {
