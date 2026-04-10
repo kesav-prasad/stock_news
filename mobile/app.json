@@ -14,7 +14,13 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "StockNews",
+      "shortName": "StockNews",
+      "themeColor": "#2563EB",
+      "backgroundColor": "#030712",
+      "display": "standalone",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router",
