@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "stocknews",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "android": {
       "edgeToEdgeEnabled": true,
       "package": "com.stocknews.app"
@@ -33,8 +33,7 @@
       "expo-secure-store"
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "extra": {
       "router": {},
