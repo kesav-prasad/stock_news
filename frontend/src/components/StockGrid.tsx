@@ -20,6 +20,11 @@ interface StockGridProps {
   isPending?: boolean;
 }
 
+// Card height (96px) + gap (8px) = 104px per row
+const CARD_HEIGHT = 96;
+const ROW_GAP = 8;
+const ROW_SIZE = CARD_HEIGHT + ROW_GAP;
+
 const StockGrid = memo(function StockGrid({ companies, onSelectCompany, isInWatchlist, onToggleWatchlist, isPending }: StockGridProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columnCount, setColumnCount] = useState(1);
@@ -41,7 +46,7 @@ const StockGrid = memo(function StockGrid({ companies, onSelectCompany, isInWatc
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => (columnCount === 1 ? 110 : 140),
+    estimateSize: () => ROW_SIZE,
     overscan: 8,
   });
 
@@ -63,11 +68,10 @@ const StockGrid = memo(function StockGrid({ companies, onSelectCompany, isInWatc
           return (
             <div
               key={virtualRow.index}
-              className="absolute top-0 left-0 w-full flex gap-2 sm:gap-3 md:gap-4"
+              className="absolute top-0 left-0 w-full flex gap-2 sm:gap-3"
               style={{
-                height: `${virtualRow.size}px`,
+                height: `${CARD_HEIGHT}px`,
                 transform: `translateY(${virtualRow.start}px)`,
-                padding: '2px 0',
               }}
             >
               {rowItems.map((company) => (
