@@ -6,12 +6,18 @@ const config: CapacitorConfig = {
   webDir: 'out',
   android: {
     allowMixedContent: true,
+    backgroundColor: '#030712', // gray-950
   },
   server: {
-    // Allow loading external resources (API calls, Clerk auth, etc.)
     androidScheme: 'https',
+  },
+  plugins: {
+    SplashScreen: {
+      launchAutoHide: true,
+      backgroundColor: '#030712',
+      showSpinner: false,
+    },
   },
 };
 
 export default config;
-

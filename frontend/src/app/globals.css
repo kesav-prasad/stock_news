@@ -6,7 +6,21 @@
 @layer base {
   body {
     @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Prevent overscroll bounce on mobile */
+    overscroll-behavior: none;
   }
+
+  /* Force dark mode by default for the app */
+  html {
+    color-scheme: dark;
+  }
+}
+
+/* Safe area for bottom navigation (notch phones) */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* Lightweight CSS animations for modal — no JS overhead */
@@ -26,4 +40,22 @@
 
 .animate-slide-up {
   animation: slide-up 0.2s ease-out;
+}
+
+/* Scrollbar styling for the content area */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.3);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.5);
 }

@@ -27,7 +27,7 @@ const StockGrid = memo(function StockGrid({ companies, onSelectCompany, isInWatc
   useEffect(() => {
     function updateColumns() {
       const w = window.innerWidth;
-      if (w < 640) setColumnCount(1);
+      if (w < 768) setColumnCount(1);
       else if (w < 1024) setColumnCount(2);
       else setColumnCount(3);
     }
@@ -41,19 +41,19 @@ const StockGrid = memo(function StockGrid({ companies, onSelectCompany, isInWatc
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => (columnCount === 1 ? 130 : 155),
-    overscan: 5,
+    estimateSize: () => (columnCount === 1 ? 110 : 140),
+    overscan: 8,
   });
 
   if (companies.length === 0) {
-    return null; // Empty state is handled by the parent
+    return null;
   }
 
   return (
     <div 
       ref={parentRef} 
       className={`flex-1 overflow-auto w-full transition-opacity duration-200 ${isPending ? 'opacity-50 pointer-events-none' : 'opacity-100'}`} 
-      style={{ height: 'calc(100dvh - 260px)' }}
+      style={{ height: '100%' }}
     >
       <div className="w-full relative" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
@@ -63,14 +63,15 @@ const StockGrid = memo(function StockGrid({ companies, onSelectCompany, isInWatc
           return (
             <div
               key={virtualRow.index}
-              className="absolute top-0 left-0 w-full flex gap-2 sm:gap-3 md:gap-4 px-1 sm:px-2"
+              className="absolute top-0 left-0 w-full flex gap-2 sm:gap-3 md:gap-4"
               style={{
-                height: `${virtualRow.size - 8}px`,
+                height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
+                padding: '2px 0',
               }}
             >
               {rowItems.map((company) => (
-                <div key={company.id} className="flex-1 min-w-0 py-1">
+                <div key={company.id} className="flex-1 min-w-0">
                   <StockCard
                     company={company}
                     onSelect={onSelectCompany}
