@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '@clerk/nextjs';
+import { useAuth } from '@clerk/clerk-react';
 
 export function useWatchlist() {
   const { getToken, isSignedIn } = useAuth();

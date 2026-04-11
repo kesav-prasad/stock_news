@@ -7,7 +7,7 @@ import { Search, BarChart3, SlidersHorizontal, Heart, Star, Trash2 } from 'lucid
 import StockGrid from '@/components/StockGrid';
 import CompanyModal from '@/components/CompanyModal';
 import { useWatchlist } from '@/hooks/useWatchlist';
-import { SignInButton, UserButton, useUser } from '@clerk/nextjs';
+import { SignInButton, UserButton, useUser } from '@clerk/clerk-react';
 
 interface Company {
   id: string;
@@ -253,7 +253,7 @@ export default function DashboardPage() {
             </div>
           ) : error ? (
             <div className="flex-1 flex items-center justify-center text-red-500 font-medium py-20 text-sm px-4 text-center">
-              Failed to load data. Ensure the backend is running on port 4000.
+              Failed to load data. Please check your internet connection and try again.
             </div>
           ) : displayedCompanies.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center py-16 sm:py-20 px-4">

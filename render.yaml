@@ -3,12 +3,19 @@ services:
     name: stocknews-backend
     runtime: node
     rootDir: backend
-    # Simply generate Prisma client without a long-running seed
-    buildCommand: npm install && npx prisma generate
-    # Start the server using ts-node via the dev script (or prod if configured)
-    startCommand: npm run dev
+    buildCommand: npm install && npx prisma generate && npx prisma db push --accept-data-loss
+    startCommand: npx ts-node src/index.ts
+    plan: free
     envVars:
       - key: DATABASE_URL
         value: file:./prisma/dev.db
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: "10000"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
