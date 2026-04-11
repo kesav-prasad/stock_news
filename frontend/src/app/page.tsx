@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useMemo, useDeferredValue, useCallback, useTransition } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Search, BarChart3, Heart, Star, Trash2, Newspaper } from 'lucide-react';
+import { useState, useMemo, useDeferredValue, useCallback, useTransition, useEffect } from 'react';
+import { Search, BarChart3, Heart, Star, Trash2, WifiOff, RefreshCw } from 'lucide-react';
 import StockGrid from '@/components/StockGrid';
 import CompanyModal from '@/components/CompanyModal';
 import { useWatchlist } from '@/hooks/useWatchlist';
+import { useCompanies } from '@/hooks/useCompanies';
 import { SignInButton, UserButton, useUser } from '@clerk/clerk-react';
+import { isOnline } from '@/lib/offlineCache';
 
 interface Company {
   id: string;
@@ -25,6 +26,20 @@ export default function DashboardPage() {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [activeTab, setActiveTab] = useState<ViewTab>('all');
   const [isPending, startTransition] = useTransition();
+  const [networkStatus, setNetworkStatus] = useState(true);
+
+  // Monitor network status
+  useEffect(() => {
+    setNetworkStatus(isOnline());
+    const handleOnline = () => setNetworkStatus(true);
+    const handleOffline = () => setNetworkStatus(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const handleTabChange = useCallback((tab: ViewTab) => {
     startTransition(() => {
@@ -43,21 +58,8 @@ export default function DashboardPage() {
 
   const { isSignedIn } = useUser();
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['companies'],
-    queryFn: async () => {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://stocknews-backend.onrender.com';
-      const res = await fetch(`${baseUrl}/api/companies?limit=5000`);
-      if (!res.ok) throw new Error('Network response was not ok');
-      return res.json();
-    },
-    retry: 5,
-    retryDelay: (attemptIndex) => Math.min(2000 * 2 ** attemptIndex, 30000),
-    staleTime: Infinity,
-  });
-
-  const allCompanies: Company[] = data?.companies || [];
-  const total = data?.total || 0;
+  // ★ OFFLINE-FIRST: Companies load INSTANTLY from embedded data
+  const { companies: allCompanies, total } = useCompanies();
 
   const displayedCompanies = useMemo(() => {
     let list = allCompanies;
@@ -88,12 +90,21 @@ export default function DashboardPage() {
     return `${displayedCompanies.length} of ${total}`;
   }, [activeTab, displayedCompanies.length, total]);
 
-  // Stable callbacks so StockGrid never re-renders from new function refs
   const handleSelectCompany = useCallback((c: Company) => setSelectedCompany(c), []);
   const handleCloseModal = useCallback(() => setSelectedCompany(null), []);
 
   return (
     <div className="min-h-screen min-h-[100dvh] flex flex-col bg-gray-50 dark:bg-gray-950">
+      {/* ====== OFFLINE BANNER ====== */}
+      {!networkStatus && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1.5 flex items-center justify-center gap-2">
+          <WifiOff size={13} className="text-amber-500" />
+          <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+            Offline mode — showing saved data
+          </span>
+        </div>
+      )}
+
       {/* ====== HEADER ====== */}
       <header className="sticky top-0 z-50 bg-white/90 dark:bg-gray-950/90 backdrop-blur-xl border-b border-gray-200/80 dark:border-gray-800/80 px-4 pt-3 pb-2 sm:px-6 md:px-8 sm:py-4">
         <div className="max-w-7xl mx-auto space-y-3">
@@ -159,11 +170,9 @@ export default function DashboardPage() {
                 ))}
               </div>
 
-              {!isLoading && !error && (
-                <span className="ml-auto text-xs font-medium text-gray-400 dark:text-gray-500 tabular-nums">
-                  {statsText}
-                </span>
-              )}
+              <span className="ml-auto text-xs font-medium text-gray-400 dark:text-gray-500 tabular-nums">
+                {statsText}
+              </span>
             </div>
           )}
 
@@ -195,19 +204,8 @@ export default function DashboardPage() {
       {/* ====== MAIN CONTENT ====== */}
       <main className="flex-1 overflow-hidden flex flex-col pb-16">
         <div className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8 py-2 sm:py-3 flex flex-col overflow-hidden">
-          {isLoading ? (
-            <div className="flex-1 flex flex-col items-center justify-center py-20 gap-3">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400" />
-              <span className="text-xs text-gray-400 animate-pulse">Loading companies...</span>
-            </div>
-          ) : error ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-red-500 font-medium py-20 text-sm px-4 text-center gap-3">
-              <div className="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
-                <Newspaper size={24} className="text-red-400" />
-              </div>
-              <span>Failed to load data. Please check your internet connection and try again.</span>
-            </div>
-          ) : displayedCompanies.length === 0 ? (
+          {/* ★ Companies always render immediately — no loading/error states */}
+          {displayedCompanies.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center py-16 px-4">
               {activeTab === 'watchlist' ? (
                 <div className="flex flex-col items-center text-center max-w-sm">
@@ -229,7 +227,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="text-gray-500 font-medium text-sm">
-                  No companies found.
+                  No companies match your search.
                 </div>
               )}
             </div>

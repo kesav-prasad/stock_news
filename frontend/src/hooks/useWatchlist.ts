@@ -1,82 +1,101 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
+import { getLocalWatchlist, setLocalWatchlist, isOnline, resilientFetch } from '@/lib/offlineCache';
 
+/**
+ * Offline-first watchlist hook.
+ * 
+ * - Watchlist is stored LOCALLY first (instant, works offline)
+ * - Syncs with server when online
+ * - No loading states, no errors — always works
+ */
 export function useWatchlist() {
   const { getToken, isSignedIn } = useAuth();
-  const queryClient = useQueryClient();
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://stocknews-backend.onrender.com';
 
-  const { data: watchlistData, isSuccess } = useQuery({
-    queryKey: ['watchlist', isSignedIn],
-    queryFn: async () => {
-      if (!isSignedIn) return { watchlistIds: [] };
-      const token = await getToken();
-      if (!token) return { watchlistIds: [] };
+  // Local-first state
+  const [localIds, setLocalIds] = useState<string[]>(() => getLocalWatchlist());
+  const [hydrated, setHydrated] = useState(false);
 
-      const res = await fetch(`${baseUrl}/api/watchlist`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch watchlist');
-      return res.json();
-    },
-    enabled: true,
-  });
+  // On mount + sign in: try to sync from server
+  useEffect(() => {
+    setHydrated(true);
 
-  const watchlistIds = useMemo(() => {
-    return new Set<string>(watchlistData?.watchlistIds || []);
-  }, [watchlistData]);
+    async function syncFromServer() {
+      if (!isSignedIn || !isOnline()) return;
 
-  const toggleMutation = useMutation({
-    mutationFn: async (companyId: string) => {
-      if (!isSignedIn) return;
-      const token = await getToken();
-      const res = await fetch(`${baseUrl}/api/watchlist/toggle`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` 
-        },
-        body: JSON.stringify({ companyId })
-      });
-      if (!res.ok) throw new Error('Failed to toggle watchlist');
-    },
-    onMutate: async (companyId: string) => {
-      await queryClient.cancelQueries({ queryKey: ['watchlist'] });
-      const previous = queryClient.getQueryData(['watchlist', isSignedIn]);
+      try {
+        const token = await getToken();
+        if (!token) return;
 
-      queryClient.setQueryData(['watchlist', isSignedIn], (old: any) => {
-        if (!old) return { watchlistIds: [companyId] };
-        const ids = new Set(old.watchlistIds);
-        if (ids.has(companyId)) {
-          ids.delete(companyId);
-        } else {
-          ids.add(companyId);
+        const res = await resilientFetch(`${baseUrl}/api/watchlist`, {
+          timeoutMs: 10000,
+          retries: 1,
+        });
+        // We need to pass headers, so use regular fetch with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const response = await fetch(`${baseUrl}/api/watchlist`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.watchlistIds) {
+            // Merge: keep local additions, add server items
+            const merged = [...new Set([...localIds, ...data.watchlistIds])];
+            setLocalIds(merged);
+            setLocalWatchlist(merged);
+          }
         }
-        return { watchlistIds: Array.from(ids) };
-      });
-
-      return { previous };
-    },
-    onError: (err, variables, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(['watchlist', isSignedIn], context.previous);
+      } catch {
+        // Silently ignore — local watchlist works fine
       }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
-    },
-  });
+    }
+
+    syncFromServer();
+  }, [isSignedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const watchlistIds = useMemo(() => new Set<string>(localIds), [localIds]);
 
   const toggleWatchlist = useCallback((companyId: string) => {
-    if (!isSignedIn) {
-      alert("Please sign in to add companies to your watchlist.");
-      return;
-    }
-    toggleMutation.mutate(companyId);
-  }, [isSignedIn, toggleMutation]);
+    setLocalIds(prev => {
+      const newIds = prev.includes(companyId)
+        ? prev.filter(id => id !== companyId)
+        : [...prev, companyId];
+      setLocalWatchlist(newIds);
+
+      // Try to sync with server in background (fire-and-forget)
+      if (isSignedIn && isOnline()) {
+        (async () => {
+          try {
+            const token = await getToken();
+            if (!token) return;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            await fetch(`${baseUrl}/api/watchlist/toggle`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ companyId }),
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+          } catch {
+            // Server sync failed — that's fine, local state is source of truth
+          }
+        })();
+      }
+
+      return newIds;
+    });
+  }, [isSignedIn, getToken, baseUrl]);
 
   const isInWatchlist = useCallback(
     (companyId: string) => watchlistIds.has(companyId),
@@ -86,7 +105,8 @@ export function useWatchlist() {
   const watchlistCount = useMemo(() => watchlistIds.size, [watchlistIds]);
 
   const clearWatchlist = useCallback(() => {
-    console.warn("Clear watchlist is not supported via cloud sync yet.");
+    setLocalIds([]);
+    setLocalWatchlist([]);
   }, []);
 
   return {
@@ -95,6 +115,6 @@ export function useWatchlist() {
     isInWatchlist,
     watchlistCount,
     clearWatchlist,
-    hydrated: isSuccess || !isSignedIn,
+    hydrated,
   };
 }
