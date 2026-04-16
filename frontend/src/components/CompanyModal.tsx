@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import { X, Heart } from 'lucide-react';
 import NewsPanel from './NewsPanel';
+import StockChart from './StockChart';
+import { useStockPrice } from '@/hooks/useStockPrice';
 
 interface Company {
   id: string;
@@ -28,6 +30,16 @@ export default function CompanyModal({ company, onClose, isWatchlisted, onToggle
     }
   }, [company]);
 
+  // ★ Live price + chart data
+  const {
+    quote,
+    chartData,
+    period,
+    changePeriod,
+    isQuoteLoading,
+    isChartLoading,
+  } = useStockPrice(company?.id ?? null);
+
   if (!company) return null;
 
   return (
@@ -45,7 +57,7 @@ export default function CompanyModal({ company, onClose, isWatchlisted, onToggle
         </div>
 
         {/* Header */}
-        <div className="flex justify-between items-start p-4 sm:p-6 border-b border-gray-200 dark:border-gray-800 shrink-0">
+        <div className="flex justify-between items-start p-4 sm:p-6 pb-2 sm:pb-3 shrink-0">
           <div className="min-w-0 pr-3 flex-1">
             <h2 className="text-lg sm:text-xl font-bold truncate">{company.name}</h2>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -88,8 +100,21 @@ export default function CompanyModal({ company, onClose, isWatchlisted, onToggle
           </div>
         </div>
 
-        {/* News Panel */}
+        {/* Scrollable content: Chart + News */}
         <div className="flex-1 overflow-y-auto overscroll-contain">
+          {/* ★ LIVE PRICE CHART */}
+          <div className="border-b border-gray-100 dark:border-gray-800/60">
+            <StockChart
+              quote={quote}
+              chartData={chartData}
+              period={period}
+              onPeriodChange={changePeriod}
+              isQuoteLoading={isQuoteLoading}
+              isChartLoading={isChartLoading}
+            />
+          </div>
+
+          {/* News Panel */}
           <NewsPanel companyId={company.id} />
         </div>
       </div>

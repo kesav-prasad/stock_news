@@ -1,5 +1,15 @@
-import yahooFinance from 'yahoo-finance2';
-import { prisma } from '../index';
+import YahooFinance from 'yahoo-finance2';
+const yahooFinance = new YahooFinance();
+import { PrismaClient } from '@prisma/client';
+
+// Use a lazy import to avoid circular dependency with index.ts
+let _prisma: PrismaClient | null = null;
+function getPrisma(): PrismaClient {
+  if (!_prisma) {
+    _prisma = new PrismaClient();
+  }
+  return _prisma;
+}
 
 export async function fetchStockQuote(symbol: string) {
   try {
@@ -22,14 +32,14 @@ export async function fetchStockQuote(symbol: string) {
   }
 }
 
-export async function fetchHistoricalData(symbol: string, period: '1D' | '1W' | '1M' | '1Y') {
+export async function fetchHistoricalData(symbol: string, period: '1M' | '6M' | '1Y' | '5Y') {
   try {
     const now = new Date();
     const periodMap = {
-      '1D': { period1: new Date(now.getTime() - 24 * 60 * 60 * 1000), interval: '5m' as const },
-      '1W': { period1: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), interval: '1h' as const },
       '1M': { period1: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), interval: '1d' as const },
-      '1Y': { period1: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000), interval: '1wk' as const }
+      '6M': { period1: new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000), interval: '1d' as const },
+      '1Y': { period1: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000), interval: '1wk' as const },
+      '5Y': { period1: new Date(now.getTime() - 5 * 365 * 24 * 60 * 60 * 1000), interval: '1mo' as const }
     };
 
     const queryOptions: any = {
@@ -51,6 +61,7 @@ export async function fetchHistoricalData(symbol: string, period: '1D' | '1W' | 
 
 export async function updateAllStockPrices() {
   console.log('Updating stock prices...');
+  const prisma = getPrisma();
   const companies = await prisma.company.findMany();
   
   // Throttle requests not to get banned

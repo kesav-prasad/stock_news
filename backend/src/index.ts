@@ -4,6 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { fetchNewsForCompany } from './services/aiNewsService';
+import { fetchStockQuote, fetchHistoricalData } from './services/marketDataService';
 import { ClerkExpressRequireAuth, StrictAuthProp } from '@clerk/clerk-sdk-node';
 
 declare global {
@@ -14,7 +15,13 @@ declare global {
 
 dotenv.config();
 
-const prisma = new PrismaClient();
+export const prisma = new PrismaClient();
+
+// ★ In-memory cache for stock data (avoids hammering Yahoo Finance)
+const quoteCache = new Map<string, { data: any; expires: number }>();
+const histCache = new Map<string, { data: any; expires: number }>();
+const QUOTE_TTL = 60_000; // 60 seconds
+const HIST_TTL = 300_000; // 5 minutes
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -129,6 +136,74 @@ app.get('/api/companies/:id/news', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch news' });
+  }
+});
+
+// ★ Live stock quote (cached 60s)
+app.get('/api/companies/:id/quote', async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Check cache first
+    const cached = quoteCache.get(id);
+    if (cached && Date.now() < cached.expires) {
+      res.json(cached.data);
+      return;
+    }
+
+    const company = await prisma.company.findUnique({ where: { id } });
+    if (!company) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    const quote = await fetchStockQuote(company.symbol);
+    if (!quote) {
+      // Try latest from DB
+      const latest = await prisma.stockPrice.findFirst({
+        where: { companyId: id },
+        orderBy: { timestamp: 'desc' },
+      });
+      const fallback = latest
+        ? { price: latest.price, change: latest.change, changePercent: latest.changePercent, timestamp: latest.timestamp, symbol: company.symbol, name: company.name }
+        : { price: 0, change: 0, changePercent: 0, timestamp: new Date(), symbol: company.symbol, name: company.name };
+      res.json(fallback);
+      return;
+    }
+
+    const result = { ...quote, symbol: company.symbol, name: company.name };
+    quoteCache.set(id, { data: result, expires: Date.now() + QUOTE_TTL });
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch quote' });
+  }
+});
+
+// ★ Historical chart data (cached 5min)
+app.get('/api/companies/:id/historical', async (req, res) => {
+  const { id } = req.params;
+  const period = (req.query.period as string) || '1M';
+  const cacheKey = `${id}_${period}`;
+  try {
+    // Check cache
+    const cached = histCache.get(cacheKey);
+    if (cached && Date.now() < cached.expires) {
+      res.json(cached.data);
+      return;
+    }
+
+    const company = await prisma.company.findUnique({ where: { id } });
+    if (!company) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    const data = await fetchHistoricalData(company.symbol, period as any);
+    histCache.set(cacheKey, { data, expires: Date.now() + HIST_TTL });
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch historical data' });
   }
 });
 

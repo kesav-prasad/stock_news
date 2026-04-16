@@ -15,7 +15,7 @@ interface PanelProps {
 }
 
 export default function ExpandablePanel({ company }: PanelProps) {
-  const [period, setPeriod] = useState<'1D' | '1W' | '1M' | '1Y'>('1M');
+  const [period, setPeriod] = useState<'1M' | '6M' | '1Y' | '5Y'>('1M');
 
   const { data: chartData, isLoading: isChartLoading } = useQuery({
     queryKey: ['historical', company.id, period],
@@ -44,7 +44,7 @@ export default function ExpandablePanel({ company }: PanelProps) {
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold dark:text-gray-100">Price History</h3>
           <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-            {['1D', '1W', '1M', '1Y'].map((p) => (
+            {['1M', '6M', '1Y', '5Y'].map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p as any)}
@@ -79,7 +79,9 @@ export default function ExpandablePanel({ company }: PanelProps) {
                   dataKey="time" 
                   tickFormatter={(unixTime) => {
                     const date = new Date(unixTime * 1000);
-                    return period === '1D' ? date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : date.toLocaleDateString();
+                    return period === '1M' || period === '6M' 
+                      ? date.toLocaleDateString([], { month: 'short', day: 'numeric' }) 
+                      : date.toLocaleDateString([], { month: 'short', year: '2-digit' });
                   }}
                   stroke="#9ca3af"
                   fontSize={12}

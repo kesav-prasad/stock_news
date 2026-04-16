@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getCachedNews,
   setCachedNews,
@@ -19,14 +19,13 @@ interface NewsArticle {
 }
 
 /**
- * Offline-first news hook.
+ * ★ PERFORMANCE-OPTIMIZED: Offline-first news hook.
  * 
- * 1. Shows cached news INSTANTLY if available (from previous views)
- * 2. Fetches fresh news in background
- * 3. If no cache and offline → shows helpful "offline" message (not an error)
- * 4. If no cache and online → shows loading then data
- * 
- * Designed for slow 2G/3G forest area connections.
+ * Key improvements:
+ * - Shows cached news INSTANTLY (no loading spinner if cache exists)
+ * - Reduced timeouts for faster failure detection (15s vs 25s)
+ * - Single retry instead of 2 to reduce wait time
+ * - Deduplication: won't refetch if already fetching for same company
  */
 export function useNews(companyId: string | null) {
   const [news, setNews] = useState<NewsArticle[]>([]);
@@ -34,8 +33,13 @@ export function useNews(companyId: string | null) {
   const [isOffline, setIsOffline] = useState(false);
   const [hasCachedData, setHasCachedData] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const fetchingRef = useRef<string | null>(null);
 
   const fetchNews = useCallback(async (id: string, force = false) => {
+    // ★ Prevent duplicate fetches for the same company
+    if (fetchingRef.current === id && !force) return;
+    fetchingRef.current = id;
+
     // 1. Try cache first (instant)
     const cached = getCachedNews(id);
     if (cached && cached.length > 0) {
@@ -44,7 +48,10 @@ export function useNews(companyId: string | null) {
       setIsLoading(false);
 
       // If cache is fresh enough and not forced, skip network
-      if (!force && !isNewsCacheStale(id)) return;
+      if (!force && !isNewsCacheStale(id)) {
+        fetchingRef.current = null;
+        return;
+      }
     }
 
     // 2. Try fetching from server
@@ -53,6 +60,7 @@ export function useNews(companyId: string | null) {
       if (!cached || cached.length === 0) {
         setIsLoading(false);
       }
+      fetchingRef.current = null;
       return;
     }
 
@@ -66,9 +74,9 @@ export function useNews(companyId: string | null) {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://stocknews-backend.onrender.com';
       const res = await resilientFetch(`${baseUrl}/api/companies/${id}/news`, {
-        timeoutMs: 25000, // 25s for slow connections
-        retries: 2,
-        retryDelayMs: 3000,
+        timeoutMs: 15000,  // ★ Reduced from 25s → 15s for faster response
+        retries: 1,        // ★ Reduced from 2 → 1 for faster failure
+        retryDelayMs: 2000,
       });
       const freshNews = await res.json();
       if (Array.isArray(freshNews) && freshNews.length > 0) {
@@ -88,6 +96,7 @@ export function useNews(companyId: string | null) {
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
+      fetchingRef.current = null;
     }
   }, []);
 

@@ -1,10 +1,16 @@
 'use client';
 
-import { Loader2, ExternalLink, WifiOff, RefreshCw } from 'lucide-react';
+import { useCallback } from 'react';
+import { Loader2, ExternalLink, WifiOff, RefreshCw, Newspaper } from 'lucide-react';
 import { useNews } from '@/hooks/useNews';
+import { openInAppBrowser } from '@/lib/inAppBrowser';
 
 export default function NewsPanel({ companyId }: { companyId: string }) {
   const { news, isLoading, isOffline, hasCachedData, isRefreshing, retry } = useNews(companyId);
+
+  const handleOpenArticle = useCallback((url: string) => {
+    openInAppBrowser(url);
+  }, []);
 
   return (
     <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
@@ -52,16 +58,14 @@ export default function NewsPanel({ companyId }: { companyId: string }) {
         </div>
       )}
 
-      {/* News articles */}
+      {/* News articles — opens in-app browser instead of external Chrome */}
       {news.length > 0 && (
         <>
           {news.map((article: any) => (
-            <a
+            <button
               key={article.id}
-              href={article.url}
-              target="_blank"
-              rel="noreferrer"
-              className="block p-3 sm:p-4 rounded-lg sm:rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 hover:shadow-md active:bg-gray-100 dark:active:bg-gray-750 hover:border-blue-200 dark:hover:border-blue-800 transition-all group"
+              onClick={() => handleOpenArticle(article.url)}
+              className="block w-full text-left p-3 sm:p-4 rounded-lg sm:rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 hover:shadow-md active:bg-gray-100 dark:active:bg-gray-750 hover:border-blue-200 dark:hover:border-blue-800 transition-all group"
             >
               <div className="flex justify-between items-start mb-1.5 sm:mb-2 gap-2">
                 <span className="text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 shrink-0">
@@ -75,10 +79,10 @@ export default function NewsPanel({ companyId }: { companyId: string }) {
                 {article.title}
               </h4>
               <div className="flex items-center gap-1 mt-1.5 sm:mt-2 text-[10px] sm:text-xs text-gray-400 group-hover:text-blue-400 transition-colors">
-                <ExternalLink size={10} className="sm:w-3 sm:h-3" />
-                <span>Read full article</span>
+                <Newspaper size={10} className="sm:w-3 sm:h-3" />
+                <span>Read in-app</span>
               </div>
-            </a>
+            </button>
           ))}
         </>
       )}
@@ -92,3 +96,4 @@ export default function NewsPanel({ companyId }: { companyId: string }) {
     </div>
   );
 }
+

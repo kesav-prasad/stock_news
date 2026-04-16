@@ -17,15 +17,14 @@ interface StockGridProps {
   onSelectCompany: (company: Company) => void;
   isInWatchlist: (companyId: string) => boolean;
   onToggleWatchlist: (companyId: string) => void;
-  isPending?: boolean;
 }
 
-// Card height (96px) + gap (8px) = 104px per row
-const CARD_HEIGHT = 96;
-const ROW_GAP = 8;
+// ★ Updated: Card height (120px) + gap (10px) = 130px per row
+const CARD_HEIGHT = 120;
+const ROW_GAP = 10;
 const ROW_SIZE = CARD_HEIGHT + ROW_GAP;
 
-const StockGrid = memo(function StockGrid({ companies, onSelectCompany, isInWatchlist, onToggleWatchlist, isPending }: StockGridProps) {
+const StockGrid = memo(function StockGrid({ companies, onSelectCompany, isInWatchlist, onToggleWatchlist }: StockGridProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columnCount, setColumnCount] = useState(1);
 
@@ -47,7 +46,7 @@ const StockGrid = memo(function StockGrid({ companies, onSelectCompany, isInWatc
     count: rowCount,
     getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_SIZE,
-    overscan: 8,
+    overscan: 5, // Reduced from 8 — less off-screen rendering
   });
 
   if (companies.length === 0) {
@@ -57,10 +56,21 @@ const StockGrid = memo(function StockGrid({ companies, onSelectCompany, isInWatc
   return (
     <div 
       ref={parentRef} 
-      className={`flex-1 overflow-auto w-full transition-opacity duration-200 ${isPending ? 'opacity-50 pointer-events-none' : 'opacity-100'}`} 
-      style={{ height: '100%' }}
+      className="flex-1 overflow-auto w-full" 
+      style={{ 
+        height: '100%',
+        // ★ GPU-accelerated scroll container
+        WebkitOverflowScrolling: 'touch',
+        contain: 'strict',
+      }}
     >
-      <div className="w-full relative" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
+      <div 
+        className="w-full relative" 
+        style={{ 
+          height: `${rowVirtualizer.getTotalSize()}px`,
+          contain: 'layout size',
+        }}
+      >
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
           const startIndex = virtualRow.index * columnCount;
           const rowItems = companies.slice(startIndex, startIndex + columnCount);
@@ -68,10 +78,11 @@ const StockGrid = memo(function StockGrid({ companies, onSelectCompany, isInWatc
           return (
             <div
               key={virtualRow.index}
-              className="absolute top-0 left-0 w-full flex gap-2 sm:gap-3"
+              className="absolute top-0 left-0 w-full flex gap-2.5"
               style={{
                 height: `${CARD_HEIGHT}px`,
                 transform: `translateY(${virtualRow.start}px)`,
+                contain: 'layout style',
               }}
             >
               {rowItems.map((company) => (

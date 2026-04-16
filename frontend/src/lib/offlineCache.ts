@@ -128,7 +128,7 @@ export async function resilientFetch(
     retryDelayMs?: number;
   }
 ): Promise<Response> {
-  const { timeoutMs = 15000, retries = 3, retryDelayMs = 2000 } = options || {};
+  const { timeoutMs = 10000, retries = 2, retryDelayMs = 1000 } = options || {};
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {

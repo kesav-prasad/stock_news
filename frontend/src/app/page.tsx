@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useMemo, useDeferredValue, useCallback, useTransition, useEffect } from 'react';
-import { Search, BarChart3, Heart, Star, Trash2, WifiOff, RefreshCw } from 'lucide-react';
+import { useState, useMemo, useDeferredValue, useCallback, useTransition, useEffect, useRef } from 'react';
+import { Search, BarChart3, Heart, Star, Trash2, WifiOff } from 'lucide-react';
 import StockGrid from '@/components/StockGrid';
 import CompanyModal from '@/components/CompanyModal';
 import { useWatchlist } from '@/hooks/useWatchlist';
 import { useCompanies } from '@/hooks/useCompanies';
+import { useNewsNotifications } from '@/hooks/useNewsNotifications';
 import { SignInButton, UserButton, useUser } from '@clerk/clerk-react';
 import { isOnline } from '@/lib/offlineCache';
 
@@ -18,6 +19,18 @@ interface Company {
 }
 
 type ViewTab = 'all' | 'watchlist';
+
+// ★ Pre-build exchange indexes for instant O(1) filtering
+function buildExchangeIndexes(companies: Company[]) {
+  const nse: Company[] = [];
+  const bse: Company[] = [];
+  for (let i = 0; i < companies.length; i++) {
+    const c = companies[i];
+    if (c.exchange === 'NSE') nse.push(c);
+    else if (c.exchange === 'BSE') bse.push(c);
+  }
+  return { NSE: nse, BSE: bse };
+}
 
 export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,9 +54,16 @@ export default function DashboardPage() {
     };
   }, []);
 
+  // ★ Wrap ALL filter changes in startTransition so UI stays responsive
   const handleTabChange = useCallback((tab: ViewTab) => {
     startTransition(() => {
       setActiveTab(tab);
+    });
+  }, []);
+
+  const handleExchangeChange = useCallback((value: string) => {
+    startTransition(() => {
+      setExchange(value);
     });
   }, []);
 
@@ -56,22 +76,33 @@ export default function DashboardPage() {
     hydrated,
   } = useWatchlist();
 
+  // Initialize push notifications
+  useNewsNotifications();
+
   const { isSignedIn } = useUser();
 
-  // ★ OFFLINE-FIRST: Companies load INSTANTLY from embedded data
-  const { companies: allCompanies, total } = useCompanies();
+  // ★ OFFLINE-FIRST: Companies load with brief animation
+  const { companies: allCompanies, total, isLoading: companiesLoading } = useCompanies();
 
+  // ★ Pre-build exchange indexes — only recalculated when data changes, NOT on filter tap
+  const exchangeIndexes = useMemo(() => buildExchangeIndexes(allCompanies), [allCompanies]);
+
+  // ★ Optimized filtering — uses pre-built indexes for exchange, avoids re-scanning 2681 items
   const displayedCompanies = useMemo(() => {
-    let list = allCompanies;
+    // 1. Start with the right base list based on exchange filter
+    let list: Company[];
+    if (exchange && exchangeIndexes[exchange as 'NSE' | 'BSE']) {
+      list = exchangeIndexes[exchange as 'NSE' | 'BSE'];
+    } else {
+      list = allCompanies;
+    }
 
+    // 2. Watchlist filter
     if (activeTab === 'watchlist') {
       list = list.filter((c) => watchlistIds.has(c.id));
     }
 
-    if (exchange) {
-      list = list.filter(c => c.exchange === exchange);
-    }
-
+    // 3. Search filter
     if (deferredSearchTerm) {
       const lowerSearch = deferredSearchTerm.toLowerCase();
       list = list.filter(
@@ -80,12 +111,11 @@ export default function DashboardPage() {
     }
 
     return list;
-  }, [activeTab, allCompanies, watchlistIds, exchange, deferredSearchTerm]);
+  }, [activeTab, allCompanies, exchangeIndexes, watchlistIds, exchange, deferredSearchTerm]);
 
   const statsText = useMemo(() => {
     if (activeTab === 'watchlist') {
-      const shown = displayedCompanies.length;
-      return `${shown} in watchlist`;
+      return `${displayedCompanies.length} in watchlist`;
     }
     return `${displayedCompanies.length} of ${total}`;
   }, [activeTab, displayedCompanies.length, total]);
@@ -105,13 +135,13 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ====== HEADER ====== */}
-      <header className="sticky top-0 z-50 bg-white/90 dark:bg-gray-950/90 backdrop-blur-xl border-b border-gray-200/80 dark:border-gray-800/80 px-4 pt-3 pb-2 sm:px-6 md:px-8 sm:py-4">
+      {/* ====== HEADER — NO backdrop-blur (kills perf on budget phones) ====== */}
+      <header className="sticky top-0 z-50 bg-white dark:bg-gray-950 border-b border-gray-200/80 dark:border-gray-800/80 px-4 pt-3 pb-2 sm:px-6 md:px-8 sm:py-4">
         <div className="max-w-7xl mx-auto space-y-3">
           {/* Top row: Logo + Auth */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/20">
+              <div className="p-2 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600">
                 <BarChart3 className="w-5 h-5 text-white" />
               </div>
               <h1 className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent leading-tight">
@@ -123,7 +153,7 @@ export default function DashboardPage() {
             <div className="flex items-center">
               {!isSignedIn ? (
                 <SignInButton mode="modal">
-                  <button className="text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-xl shadow-sm hover:shadow transition-all">
+                  <button className="text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-xl">
                     Sign In
                   </button>
                 </SignInButton>
@@ -147,7 +177,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Exchange filter chips + stats */}
+          {/* Exchange filter chips + stats — ★ wrapped in startTransition */}
           {activeTab === 'all' && (
             <div className="flex items-center gap-2">
               <div className="flex gap-1.5">
@@ -158,11 +188,11 @@ export default function DashboardPage() {
                 ].map((item) => (
                   <button
                     key={item.value}
-                    onClick={() => setExchange(item.value)}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 ${
+                    onClick={() => handleExchangeChange(item.value)}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold ${
                       exchange === item.value
-                        ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
-                        : 'bg-gray-100 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400'
                     }`}
                   >
                     {item.label}
@@ -190,7 +220,7 @@ export default function DashboardPage() {
               {watchlistCount > 0 && (
                 <button
                   onClick={clearWatchlist}
-                  className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 dark:text-red-400"
                 >
                   <Trash2 size={12} />
                   <span>Clear</span>
@@ -204,8 +234,24 @@ export default function DashboardPage() {
       {/* ====== MAIN CONTENT ====== */}
       <main className="flex-1 overflow-hidden flex flex-col pb-16">
         <div className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8 py-2 sm:py-3 flex flex-col overflow-hidden">
-          {/* ★ Companies always render immediately — no loading/error states */}
-          {displayedCompanies.length === 0 ? (
+          {/* ★ LOADING SKELETON: Shown during initial ~400ms load */}
+          {companiesLoading ? (
+            <div className="flex flex-col gap-2.5 py-1">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="skeleton-shimmer rounded-xl border border-gray-100 dark:border-gray-800/50 h-[120px] flex items-center px-4"
+                >
+                  <div className="flex-1 space-y-3">
+                    <div className="h-4 w-28 rounded-full bg-gray-200/60 dark:bg-gray-700/40" />
+                    <div className="h-4.5 w-52 rounded-full bg-gray-200/80 dark:bg-gray-700/60" />
+                    <div className="h-3 w-20 rounded-full bg-gray-200/50 dark:bg-gray-700/30" />
+                  </div>
+                  <div className="h-11 w-11 rounded-full bg-gray-200/50 dark:bg-gray-700/30" />
+                </div>
+              ))}
+            </div>
+          ) : displayedCompanies.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center py-16 px-4">
               {activeTab === 'watchlist' ? (
                 <div className="flex flex-col items-center text-center max-w-sm">
@@ -220,7 +266,7 @@ export default function DashboardPage() {
                   </p>
                   <button
                     onClick={() => handleTabChange('all')}
-                    className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold rounded-xl shadow-md hover:shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold rounded-xl"
                   >
                     Browse Companies
                   </button>
@@ -237,18 +283,17 @@ export default function DashboardPage() {
               onSelectCompany={handleSelectCompany}
               isInWatchlist={isInWatchlist}
               onToggleWatchlist={toggleWatchlist}
-              isPending={isPending}
             />
           )}
         </div>
       </main>
 
-      {/* ====== BOTTOM NAVIGATION BAR ====== */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-t border-gray-200/80 dark:border-gray-800/80 safe-area-bottom">
+      {/* ====== BOTTOM NAVIGATION BAR — NO backdrop-blur ====== */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-950 border-t border-gray-200/80 dark:border-gray-800/80 safe-area-bottom">
         <div className="max-w-7xl mx-auto flex">
           <button
             onClick={() => handleTabChange('all')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2.5 pt-3 transition-colors duration-150 ${
+            className={`flex-1 flex flex-col items-center gap-1 py-2.5 pt-3 ${
               activeTab === 'all'
                 ? 'text-blue-600 dark:text-blue-400'
                 : 'text-gray-400 dark:text-gray-500'
@@ -259,7 +304,7 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={() => handleTabChange('watchlist')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2.5 pt-3 transition-colors duration-150 ${
+            className={`flex-1 flex flex-col items-center gap-1 py-2.5 pt-3 ${
               activeTab === 'watchlist'
                 ? 'text-blue-600 dark:text-blue-400'
                 : 'text-gray-400 dark:text-gray-500'

@@ -10,6 +10,8 @@
     -moz-osx-font-smoothing: grayscale;
     /* Prevent overscroll bounce on mobile */
     overscroll-behavior: none;
+    /* ★ Disable text selection on mobile for tap responsiveness */
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* Force dark mode by default for the app */
@@ -40,6 +42,21 @@
 
 .animate-slide-up {
   animation: slide-up 0.2s ease-out;
+}
+
+/* ★ Skeleton: simple opacity pulse — much cheaper than gradient shimmer on mobile GPUs */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+.skeleton-shimmer {
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+  background: rgba(128, 128, 128, 0.08);
+}
+
+:is(.dark) .skeleton-shimmer {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 /* Scrollbar styling for the content area */
