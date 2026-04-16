@@ -77,7 +77,19 @@ export default function DashboardPage() {
   } = useWatchlist();
 
   // Initialize push notifications
-  useNewsNotifications();
+  useNewsNotifications((companyId: string) => {
+    // We defer finding the company inside the callback. Note that `allCompanies` is updated globally.
+    // If the notification returns, find the company in our list or create a base dummy if not loaded yet.
+    startTransition(() => {
+      const targetCompany = allCompanies.find(c => c.id === companyId);
+      if (targetCompany) {
+        setSelectedCompany(targetCompany);
+      } else {
+        // Fallback stub if it hasn't finished loading all companies yet
+        setSelectedCompany({ id: companyId, name: 'Loading...', symbol: '', exchange: '' });
+      }
+    });
+  });
 
   const { isSignedIn } = useUser();
 

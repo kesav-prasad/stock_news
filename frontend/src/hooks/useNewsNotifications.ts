@@ -5,7 +5,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { useWatchlist } from './useWatchlist';
 import { resilientFetch, isOnline } from '@/lib/offlineCache';
 
-export function useNewsNotifications() {
+export function useNewsNotifications(onNotificationClick?: (companyId: string) => void) {
   const { watchlistIds } = useWatchlist();
   const watchlistRef = useRef<string[]>([]);
 
@@ -13,6 +13,11 @@ export function useNewsNotifications() {
   useEffect(() => {
     watchlistRef.current = Array.from(watchlistIds);
   }, [watchlistIds]);
+
+  const clickRef = useRef(onNotificationClick);
+  useEffect(() => {
+    clickRef.current = onNotificationClick;
+  }, [onNotificationClick]);
 
   useEffect(() => {
     // Request permission (on Android 13+ / iOS this is required)
@@ -25,6 +30,23 @@ export function useNewsNotifications() {
       }
     };
     requestPermission();
+
+    let listenerRef: any = null;
+    (async () => {
+      try {
+        listenerRef = await LocalNotifications.addListener(
+          'localNotificationActionPerformed',
+          (notificationAction) => {
+            const extra = notificationAction.notification.extra;
+            if (extra && extra.companyId && clickRef.current) {
+              clickRef.current(extra.companyId);
+            }
+          }
+        );
+      } catch (e) {
+        // Not running in Capacitor
+      }
+    })();
 
     const checkNews = async () => {
       if (!isOnline()) return;
@@ -71,6 +93,7 @@ export function useNewsNotifications() {
                       title: `New News Alert: ${latestArticle.symbol || 'Watchlist'}`,
                       body: latestArticle.title,
                       schedule: { at: new Date(Date.now() + 1000) }, // Schedule 1 second from now
+                      extra: { companyId: id },
                     }
                   ]
                 });
@@ -100,6 +123,9 @@ export function useNewsNotifications() {
     return () => {
       clearInterval(interval);
       clearTimeout(timer);
+      if (listenerRef && listenerRef.remove) {
+        listenerRef.remove().catch(() => {});
+      }
     };
   }, []);
 }
