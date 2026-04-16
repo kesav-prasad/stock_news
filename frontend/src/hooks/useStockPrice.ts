@@ -135,7 +135,7 @@ export function useStockPrice(companyId: string | null) {
 
   // Derive quote from chart if quote fails but chart succeeds
   let derivedQuote = quote;
-  if (!derivedQuote && chartData.length > 0) {
+  if ((!derivedQuote || derivedQuote.price === 0) && chartData.length > 0) {
     const lastPoint = chartData[chartData.length - 1];
     const prevPoint = chartData.length > 1 ? chartData[chartData.length - 2] : lastPoint;
     const change = lastPoint.value - prevPoint.value;
