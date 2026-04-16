@@ -59,10 +59,9 @@ export function useNewsNotifications() {
             
             const lastSeenTime = lastSeenMap[id] ? new Date(lastSeenMap[id]).getTime() : 0;
 
-            // If we have never checked this company before, record the latest but don't notify right away (prevents initial push spam)
-            if (!lastSeenMap[id]) {
-              updatedLastSeen[id] = latestArticle.publishedAt;
-            } else if (latestTime > lastSeenTime) {
+            // If we have never checked this company before OR a new article drops, notify!
+            // (This also makes it super easy to test notifications right now)
+            if (!lastSeenMap[id] || latestTime > lastSeenTime) {
               // WE HAVE NEW NEWS! ✨
               try {
                 await LocalNotifications.schedule({
