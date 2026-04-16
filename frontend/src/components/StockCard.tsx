@@ -32,14 +32,14 @@ const StockCard = memo(function StockCard({ company, onSelect, isWatchlisted, on
           ? 'border-amber-300 dark:border-amber-600/50'
           : 'border-gray-200 dark:border-gray-800'
       }`}
-      style={{ minHeight: '120px' }}
+      style={{ height: '100%' }}
     >
       {/* Card inner layout — bigger, roomier */}
       <div className="p-4 h-full flex flex-col">
         {/* Top section: Company name + symbol + heart */}
         <div className="flex items-start justify-between gap-3 min-w-0">
           <div className="min-w-0 flex-1">
-            <h3 className="font-bold text-[15px] leading-snug dark:text-gray-100 break-words pr-2">{company.name}</h3>
+            <h3 className="font-bold text-[15px] leading-snug dark:text-gray-100 line-clamp-2 break-words pr-2">{company.name}</h3>
             <p className="text-[12px] font-medium text-gray-500 dark:text-gray-400 mt-1">{company.symbol}</p>
           </div>
           {/* ★ BIGGER heart button — 44px tap target minimum */}
