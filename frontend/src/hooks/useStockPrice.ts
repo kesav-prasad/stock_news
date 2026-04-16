@@ -133,8 +133,26 @@ export function useStockPrice(companyId: string | null) {
     setPeriod(p);
   }, []);
 
+  // Derive quote from chart if quote fails but chart succeeds
+  let derivedQuote = quote;
+  if (!derivedQuote && chartData.length > 0) {
+    const lastPoint = chartData[chartData.length - 1];
+    const prevPoint = chartData.length > 1 ? chartData[chartData.length - 2] : lastPoint;
+    const change = lastPoint.value - prevPoint.value;
+    const changePercent = prevPoint.value ? (change / prevPoint.value) * 100 : 0;
+    
+    derivedQuote = {
+      price: lastPoint.value,
+      change,
+      changePercent,
+      timestamp: new Date(lastPoint.time * 1000),
+      symbol: companyId || '',
+      name: ''
+    };
+  }
+
   return {
-    quote,
+    quote: derivedQuote,
     chartData,
     period,
     changePeriod,
