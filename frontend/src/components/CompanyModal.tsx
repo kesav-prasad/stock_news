@@ -115,7 +115,7 @@ export default function CompanyModal({ company, onClose, isWatchlisted, onToggle
           </div>
 
           {/* News Panel */}
-          <NewsPanel companyId={company.id} />
+          <NewsPanel company={company} />
         </div>
       </div>
     </div>
