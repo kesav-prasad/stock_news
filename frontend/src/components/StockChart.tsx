@@ -196,7 +196,7 @@ const StockChart = memo(function StockChart({
       </div>
 
       {/* ── CHART ── */}
-      <div className="w-full h-[180px] sm:h-[220px] -mx-2">
+      <div className="w-full h-[180px] sm:h-[220px] -mx-2 outline-none border-none" style={{ WebkitTapHighlightColor: 'transparent' }}>
         {isChartLoading ? (
           <div className="w-full h-full flex items-center justify-center">
             <Loader2 className="animate-spin w-5 h-5 text-blue-500" />
