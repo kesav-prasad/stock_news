@@ -1,9 +1,10 @@
 'use client';
 
 import { memo, useCallback, useMemo, useState } from 'react';
-import { Flame, Globe, Newspaper, RefreshCw, TrendingUp, Zap, Bookmark } from 'lucide-react';
+import { Flame, Globe, Newspaper, RefreshCw, TrendingUp, Zap, Bookmark, Sparkles } from 'lucide-react';
 import { useRecentNews } from '@/hooks/useRecentNews';
 import { useBookmarks } from '@/hooks/useBookmarks';
+import { useBriefing } from '@/hooks/useBriefing';
 import { openInAppBrowser } from '@/lib/inAppBrowser';
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -245,6 +246,8 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
     watchlistIds,
     visitedCounts,
   );
+  
+  const { briefing, isLoading: isBriefingLoading } = useBriefing(priorityNews);
 
   const hasPriorityData = priorityNews.length > 0;
   const hasOtherData = otherNews.length > 0;
@@ -349,6 +352,33 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
         </div>
       ) : (
         <>
+      {/* ─── AI Morning Briefing ─── */}
+      {!isLoading && priorityNews.length > 0 && (
+        <div className="px-3 sm:px-4 mb-6">
+          <div className="relative overflow-hidden rounded-2xl p-[1px] bg-gradient-to-br from-indigo-500/30 via-purple-500/30 to-blue-500/30 shadow-sm">
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-purple-500/10" />
+            <div className="relative bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl p-4 sm:p-5 rounded-[15px]">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles size={16} className="text-indigo-500 dark:text-indigo-400" />
+                <h3 className="text-sm font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 tracking-tight">
+                  Morning Briefing
+                </h3>
+              </div>
+              {isBriefingLoading && !briefing ? (
+                <div className="space-y-1.5 animate-pulse mt-3">
+                  <div className="h-2.5 w-full bg-gray-200 dark:bg-gray-800 rounded-full" />
+                  <div className="h-2.5 w-5/6 bg-gray-200 dark:bg-gray-800 rounded-full" />
+                </div>
+              ) : (
+                <p className="text-[13px] sm:text-[14px] leading-relaxed font-medium text-gray-700 dark:text-gray-300">
+                  {briefing}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── Loading State ─── */}
       {isLoading && priorityNews.length === 0 && otherNews.length === 0 && (
         <div className="space-y-6 px-3 sm:px-4">

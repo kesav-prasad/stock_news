@@ -207,7 +207,41 @@ app.get('/api/companies/:id/historical', async (req, res) => {
   }
 });
 
+import OpenAI from 'openai';
+
 const PORT = process.env.PORT || 4000;
+
+// ★ AI Morning Briefing Generator
+const openai = new OpenAI();
+app.post('/api/briefing', async (req, res) => {
+  try {
+    const { articles } = req.body;
+    if (!articles || !Array.isArray(articles) || articles.length === 0) {
+      res.json({ briefing: "No significant news updates today to brief you on." });
+      return;
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      res.json({ briefing: `Market Update: ${articles[0].title}. Monitor your watchlist for further developments on these fronts.` });
+      return;
+    }
+
+    const prompt = `You are an elite financial analyst. Write an extremely concise, premium-feeling 2-sentence morning briefing summarizing these headlines. Do not use filler words. Be direct and insightful:\n\n` + 
+      articles.slice(0, 5).map((a: any) => `- ${a.title}`).join('\n');
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 100
+    });
+
+    res.json({ briefing: completion.choices[0].message.content?.trim() || "Market conditions remain dynamic." });
+  } catch (err) {
+    console.error("OpenAI Briefing error:", err);
+    res.json({ briefing: req.body.articles?.[0]?.title ? `Top Story: ${req.body.articles[0].title}.` : "Market conditions remain dynamic." });
+  }
+});
+
 server.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });

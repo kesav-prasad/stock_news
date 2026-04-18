@@ -168,16 +168,17 @@ export async function resilientFetch(
     timeoutMs?: number;
     retries?: number;
     retryDelayMs?: number;
+    fetchOptions?: RequestInit;
   }
 ): Promise<Response> {
-  const { timeoutMs = 10000, retries = 2, retryDelayMs = 1000 } = options || {};
+  const { timeoutMs = 10000, retries = 2, retryDelayMs = 1000, fetchOptions = {} } = options || {};
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-      const response = await fetch(url, { signal: controller.signal });
+      const response = await fetch(url, { ...fetchOptions, signal: controller.signal });
       clearTimeout(timeoutId);
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
