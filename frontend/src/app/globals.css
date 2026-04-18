@@ -59,6 +59,16 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
+/* ★ Typewriter blinking cursor */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.animate-blink {
+  animation: blink 0.8s ease-in-out infinite;
+}
+
 /* Scrollbar styling for the content area */
 ::-webkit-scrollbar {
   width: 4px;

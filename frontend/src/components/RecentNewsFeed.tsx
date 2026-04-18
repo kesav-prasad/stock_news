@@ -7,6 +7,7 @@ import { useBookmarks } from '@/hooks/useBookmarks';
 import { useBriefing } from '@/hooks/useBriefing';
 import { useSparkline } from '@/hooks/useSparkline';
 import Sparkline from './Sparkline';
+import TypewriterText from './TypewriterText';
 import { openInAppBrowser } from '@/lib/inAppBrowser';
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -384,7 +385,11 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
                 </div>
               ) : (
                 <p className="text-[13px] sm:text-[14px] leading-relaxed font-medium text-gray-700 dark:text-gray-300">
-                  {briefing || "The AI is analyzing the latest market data. Check back shortly for your personalized summary."}
+                  <TypewriterText
+                    text={briefing || "The AI is analyzing the latest market data. Check back shortly for your personalized summary."}
+                    speed={20}
+                    startDelay={400}
+                  />
                 </p>
               )}
             </div>
