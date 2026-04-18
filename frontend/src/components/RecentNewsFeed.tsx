@@ -228,9 +228,9 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
   }, [watchlistIds.size, Object.keys(visitedCounts).length]);
 
   return (
-    <div className="flex-1 w-full flex flex-col pt-1 pb-6 overflow-y-auto overscroll-contain">
+    <div className="flex-1 w-full flex flex-col pt-1 pb-6 overflow-y-auto overscroll-contain h-full min-h-0">
       {/* ─── Pull-to-refresh header ─── */}
-      <div className="flex items-center justify-between px-4 py-2 mb-1">
+      <div className="flex items-center justify-between px-4 py-2 mb-1 shrink-0">
         <div className="flex items-center gap-2">
           <TrendingUp size={16} className="text-blue-500 dark:text-blue-400" />
           <h1 className="text-[17px] font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">

@@ -263,8 +263,8 @@ export default function DashboardPage() {
       </header>
 
       {/* ====== MAIN CONTENT ====== */}
-      <main className="flex-1 overflow-hidden flex flex-col pb-16">
-        <div className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8 py-2 sm:py-3 flex flex-col overflow-hidden">
+      <main className="flex-1 overflow-hidden flex flex-col pb-16 min-h-0">
+        <div className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8 py-2 sm:py-3 flex flex-col overflow-hidden min-h-0">
           {/* Recent tab — the component handles its own data + loading internally */}
           {activeTab === 'recent' ? (
             <RecentNewsFeed
