@@ -69,27 +69,23 @@
   animation: blink 0.8s ease-in-out infinite;
 }
 
-/* ★ Kill all white borders/outlines on chart SVGs and touch targets */
+/* ★ Remove white borders/outlines on chart containers (not the chart line) */
 .recharts-wrapper,
-.recharts-surface,
-.recharts-wrapper svg,
-.recharts-responsive-container,
-.recharts-cartesian-grid,
+.recharts-responsive-container {
+  outline: none !important;
+  border: none !important;
+}
+
+/* Remove the SVG element focus outline on touch */
+.recharts-surface {
+  outline: none !important;
+}
+
+/* Kill CartesianGrid white grid lines */
 .recharts-cartesian-grid line,
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
-  outline: none !important;
-  border: none !important;
   stroke: transparent !important;
-}
-
-/* Preserve the actual chart line and area strokes */
-.recharts-area-curve {
-  stroke: inherit !important;
-}
-
-.recharts-curve.recharts-area-area {
-  stroke: none !important;
 }
 
 /* Remove focus outlines on SVG touch */
