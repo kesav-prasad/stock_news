@@ -89,6 +89,28 @@ export function isNewsCacheStale(companyId: string): boolean {
   return Date.now() - entry.timestamp > NEWS_TTL;
 }
 
+// ─── Stock Data Cache ───
+
+export function getCachedQuote(companyId: string): any | null {
+  const entry = safeGet<any>(`quote_${companyId}`);
+  if (!entry) return null;
+  return entry.data;
+}
+
+export function setCachedQuote(companyId: string, quote: any): void {
+  safeSet(`quote_${companyId}`, quote);
+}
+
+export function getCachedChart(companyId: string, period: string): any[] | null {
+  const entry = safeGet<any[]>(`chart_${companyId}_${period}`);
+  if (!entry) return null;
+  return entry.data;
+}
+
+export function setCachedChart(companyId: string, period: string, data: any[]): void {
+  safeSet(`chart_${companyId}_${period}`, data);
+}
+
 // ─── Watchlist (local-first, syncs when online) ───
 
 export function getLocalWatchlist(): string[] {

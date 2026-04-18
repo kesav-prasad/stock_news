@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { resilientFetch, isOnline } from '@/lib/offlineCache';
+import { resilientFetch, isOnline, getCachedQuote, setCachedQuote, getCachedChart, setCachedChart } from '@/lib/offlineCache';
 
 interface StockQuote {
   price: number;
@@ -45,30 +45,40 @@ export function useStockPrice(companyId: string | null) {
 
   // Fetch quote
   const fetchQuote = useCallback(async (id: string, force = false) => {
-    // 1. Check memory cache
+    // 1. Check persistent cache for instant render
+    const cachedLocal = getCachedQuote(id);
+    if (cachedLocal) {
+      setQuote(cachedLocal);
+    }
+
+    // 2. Check memory cache (deduplication)
     if (!force) {
       const cached = quoteMemCache.get(id);
       if (cached && Date.now() < cached.expires) {
-        setQuote(cached.data);
+        if (!cachedLocal) setQuote(cached.data);
         return;
       }
     }
 
-    if (!isOnline()) return;
+    if (!isOnline()) {
+      if (!cachedLocal) setIsQuoteLoading(false);
+      return;
+    }
 
-    setIsQuoteLoading(true);
+    if (!cachedLocal) setIsQuoteLoading(true);
+    
     try {
       const res = await resilientFetch(`${baseUrl}/api/companies/${id}/quote`, {
-        timeoutMs: 10000,
+        timeoutMs: 5000,
         retries: 1,
       });
       const data = await res.json();
       if (data && data.price !== undefined) {
         setQuote(data);
         quoteMemCache.set(id, { data, expires: Date.now() + QUOTE_MEM_TTL });
+        setCachedQuote(id, data);
       }
     } catch {
-      // Silently fail — chart is supplementary
       console.log('[StockPrice] Quote fetch failed');
     } finally {
       setIsQuoteLoading(false);
@@ -78,31 +88,42 @@ export function useStockPrice(companyId: string | null) {
   // Fetch historical chart data
   const fetchChart = useCallback(async (id: string, p: Period) => {
     const cacheKey = `${id}_${p}`;
-    // 1. Check memory cache
+    
+    // 1. Check persistent cache for instant render
+    const cachedLocal = getCachedChart(id, p);
+    if (cachedLocal && cachedLocal.length > 0) {
+      setChartData(cachedLocal);
+    }
+
+    // 2. Check memory cache (deduplication)
     const cached = histMemCache.get(cacheKey);
     if (cached && Date.now() < cached.expires) {
-      setChartData(cached.data);
+      if (!cachedLocal) setChartData(cached.data);
       return;
     }
 
-    if (!isOnline()) return;
+    if (!isOnline()) {
+      if (!cachedLocal) setIsChartLoading(false);
+      return;
+    }
 
-    setIsChartLoading(true);
+    if (!cachedLocal) setIsChartLoading(true);
     try {
       const res = await resilientFetch(`${baseUrl}/api/companies/${id}/historical?period=${p}`, {
-        timeoutMs: 15000,
+        timeoutMs: 6000,
         retries: 1,
       });
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         setChartData(data);
         histMemCache.set(cacheKey, { data, expires: Date.now() + HIST_MEM_TTL });
-      } else {
+        setCachedChart(id, p, data);
+      } else if (!cachedLocal) {
         setChartData([]);
       }
     } catch {
       console.log('[StockPrice] Chart fetch failed');
-      setChartData([]);
+      if (!cachedLocal) setChartData([]);
     } finally {
       setIsChartLoading(false);
     }

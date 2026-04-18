@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useMemo, useDeferredValue, useCallback, useTransition, useEffect, useRef } from 'react';
-import { Search, BarChart3, Heart, Star, Trash2, WifiOff, X } from 'lucide-react';
+import { useState, useMemo, useDeferredValue, useCallback, useTransition, useEffect } from 'react';
+import { Search, BarChart3, Heart, Star, Trash2, WifiOff, X, Clock } from 'lucide-react';
 import StockGrid from '@/components/StockGrid';
 import CompanyModal from '@/components/CompanyModal';
+import RecentNewsFeed from '@/components/RecentNewsFeed';
 import { useWatchlist } from '@/hooks/useWatchlist';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useNewsNotifications } from '@/hooks/useNewsNotifications';
+import { useRecentCompanies } from '@/hooks/useRecentCompanies';
 import { SignInButton, UserButton, useUser } from '@clerk/clerk-react';
 import { isOnline } from '@/lib/offlineCache';
 
@@ -18,7 +20,7 @@ interface Company {
   sector?: string;
 }
 
-type ViewTab = 'all' | 'watchlist';
+type ViewTab = 'all' | 'watchlist' | 'recent';
 
 // ★ Pre-build exchange indexes for instant O(1) filtering
 function buildExchangeIndexes(companies: Company[]) {
@@ -73,8 +75,10 @@ export default function DashboardPage() {
     isInWatchlist,
     watchlistCount,
     clearWatchlist,
-    hydrated,
+    hydrated: watchlistHydrated,
   } = useWatchlist();
+
+  const { visitedCounts, recordVisit } = useRecentCompanies();
 
   // Initialize push notifications
   useNewsNotifications((companyId: string) => {
@@ -109,7 +113,7 @@ export default function DashboardPage() {
       list = allCompanies;
     }
 
-    // 2. Watchlist filter
+    // 2. Watchlist filter (Recent tab handles its own data via useRecentNews)
     if (activeTab === 'watchlist') {
       list = list.filter((c) => watchlistIds.has(c.id));
     }
@@ -129,10 +133,16 @@ export default function DashboardPage() {
     if (activeTab === 'watchlist') {
       return `${displayedCompanies.length} in watchlist`;
     }
+    if (activeTab === 'recent') {
+      return `${displayedCompanies.length} recently viewed`;
+    }
     return `${displayedCompanies.length} of ${total}`;
   }, [activeTab, displayedCompanies.length, total]);
 
-  const handleSelectCompany = useCallback((c: Company) => setSelectedCompany(c), []);
+  const handleSelectCompany = useCallback((c: Company) => {
+    recordVisit(c.id);
+    setSelectedCompany(c);
+  }, [recordVisit]);
   const handleCloseModal = useCallback(() => setSelectedCompany(null), []);
 
   return (
@@ -255,8 +265,15 @@ export default function DashboardPage() {
       {/* ====== MAIN CONTENT ====== */}
       <main className="flex-1 overflow-hidden flex flex-col pb-16">
         <div className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8 py-2 sm:py-3 flex flex-col overflow-hidden">
-          {/* ★ LOADING SKELETON: Shown during initial ~400ms load */}
-          {companiesLoading ? (
+          {/* Recent tab — the component handles its own data + loading internally */}
+          {activeTab === 'recent' ? (
+            <RecentNewsFeed
+              allCompanies={allCompanies}
+              watchlistIds={watchlistIds}
+              visitedCounts={visitedCounts}
+            />
+          ) : companiesLoading ? (
+            /* ★ LOADING SKELETON: Shown during initial ~400ms load */
             <div className="flex flex-col gap-2.5 py-1">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
@@ -274,7 +291,11 @@ export default function DashboardPage() {
             </div>
           ) : displayedCompanies.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center py-16 px-4">
-              {activeTab === 'watchlist' ? (
+              {deferredSearchTerm ? (
+                <div className="text-gray-500 font-medium text-sm">
+                  No companies match your search.
+                </div>
+              ) : activeTab === 'watchlist' ? (
                 <div className="flex flex-col items-center text-center max-w-sm">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 flex items-center justify-center mb-4">
                     <Star size={28} className="text-amber-500" />
@@ -292,11 +313,7 @@ export default function DashboardPage() {
                     Browse Companies
                   </button>
                 </div>
-              ) : (
-                <div className="text-gray-500 font-medium text-sm">
-                  No companies match your search.
-                </div>
-              )}
+              ) : null}
             </div>
           ) : (
             <StockGrid
@@ -314,7 +331,7 @@ export default function DashboardPage() {
         <div className="max-w-7xl mx-auto flex">
           <button
             onClick={() => handleTabChange('all')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2.5 pt-3 ${
+            className={`flex-1 flex flex-col items-center gap-1 py-2.5 pt-3 transition-colors ${
               activeTab === 'all'
                 ? 'text-blue-600 dark:text-blue-400'
                 : 'text-gray-400 dark:text-gray-500'
@@ -323,9 +340,22 @@ export default function DashboardPage() {
             <BarChart3 size={22} className={activeTab === 'all' ? 'stroke-[2.5px]' : ''} />
             <span className="text-[10px] font-semibold">Dashboard</span>
           </button>
+          
+          <button
+            onClick={() => handleTabChange('recent')}
+            className={`flex-1 flex flex-col items-center gap-1 py-2.5 pt-3 transition-colors ${
+              activeTab === 'recent'
+                ? 'text-blue-600 dark:text-blue-400'
+                : 'text-gray-400 dark:text-gray-500'
+            }`}
+          >
+            <Clock size={22} className={activeTab === 'recent' ? 'stroke-[2.5px]' : ''} />
+            <span className="text-[10px] font-semibold">Recent</span>
+          </button>
+
           <button
             onClick={() => handleTabChange('watchlist')}
-            className={`flex-1 flex flex-col items-center gap-1 py-2.5 pt-3 ${
+            className={`flex-1 flex flex-col items-center gap-1 py-2.5 pt-3 transition-colors ${
               activeTab === 'watchlist'
                 ? 'text-blue-600 dark:text-blue-400'
                 : 'text-gray-400 dark:text-gray-500'
