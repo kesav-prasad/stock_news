@@ -16,6 +16,7 @@ interface NewsArticle {
   source: string;
   publishedAt: string;
   summary?: string;
+  sentiment?: 'bullish' | 'bearish' | 'neutral';
 }
 
 interface AggregatedNewsItem {

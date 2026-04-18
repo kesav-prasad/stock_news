@@ -91,11 +91,20 @@ export async function fetchNewsForCompany(
             const dashIdx = item.title.lastIndexOf(' - ');
             if (dashIdx !== -1) source = item.title.substring(dashIdx + 3).trim();
 
+            const titleLower = item.title.toLowerCase();
+            const bullishWords = /\b(surge|jump|soar|buy|upgrade|record|profit|gain|growth|rally|soars|up|higher|revenue|win|bull|expansion|beat|outperform)\b/i;
+            const bearishWords = /\b(plunge|drop|fall|sell|downgrade|loss|decline|miss|down|lower|lawsuit|bear|shrink|underperform|crash|weakness|probe|investigate|fraud|scam|fine)\b/i;
+            
+            let sentiment = 'neutral';
+            if (bearishWords.test(titleLower) && !bullishWords.test(titleLower)) sentiment = 'bearish';
+            else if (bullishWords.test(titleLower) && !bearishWords.test(titleLower)) sentiment = 'bullish';
+
             newArticles.push({
               title: item.title,
               url: item.link,
               source,
               publishedAt: item.isoDate ? new Date(item.isoDate) : new Date(),
+              sentiment: sentiment
             });
           }
 

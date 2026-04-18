@@ -72,6 +72,7 @@ interface NewsCardProps {
     url: string;
     source: string;
     publishedAt: string;
+    sentiment?: 'bullish' | 'bearish' | 'neutral';
   };
   company: {
     id: string;
@@ -125,8 +126,18 @@ const NewsCard = memo(function NewsCard({ article, company, isCompact }: NewsCar
               </span>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
+              {article.sentiment === 'bullish' && (
+                <span className="font-bold text-[9px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                  Bullish
+                </span>
+              )}
+              {article.sentiment === 'bearish' && (
+                <span className="font-bold text-[9px] uppercase tracking-wider text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/40 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-800">
+                  Bearish
+                </span>
+              )}
               {isRecent && (
-                <span className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-500 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full">
+                <span className="flex items-center gap-0.5 text-[10px] font-bold text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded-full">
                   <Zap size={8} className="fill-current" />
                   NEW
                 </span>
