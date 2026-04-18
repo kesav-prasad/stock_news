@@ -131,6 +131,26 @@ export function setLocalWatchlist(ids: string[]): void {
   }
 }
 
+// ─── Bookmarks (Read Later) ───
+
+export function getBookmarks(): any[] {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + 'bookmarks');
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+export function saveBookmarks(bookmarks: any[]): void {
+  try {
+    localStorage.setItem(CACHE_PREFIX + 'bookmarks', JSON.stringify(bookmarks));
+  } catch {
+    // ignore
+  }
+}
+
 // ─── Network helpers ───
 
 export function isOnline(): boolean {

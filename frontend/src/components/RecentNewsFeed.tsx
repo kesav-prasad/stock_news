@@ -1,8 +1,9 @@
 'use client';
 
-import { memo, useCallback, useMemo } from 'react';
-import { Flame, Globe, Newspaper, RefreshCw, TrendingUp, Zap } from 'lucide-react';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { Flame, Globe, Newspaper, RefreshCw, TrendingUp, Zap, Bookmark } from 'lucide-react';
 import { useRecentNews } from '@/hooks/useRecentNews';
+import { useBookmarks } from '@/hooks/useBookmarks';
 import { openInAppBrowser } from '@/lib/inAppBrowser';
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -80,9 +81,11 @@ interface NewsCardProps {
     symbol: string;
   };
   isCompact?: boolean;
+  isBookmarked?: boolean;
+  onToggleBookmark?: (e: React.MouseEvent) => void;
 }
 
-const NewsCard = memo(function NewsCard({ article, company, isCompact }: NewsCardProps) {
+const NewsCard = memo(function NewsCard({ article, company, isCompact, isBookmarked, onToggleBookmark }: NewsCardProps) {
   const handleClick = useCallback(() => {
     openInAppBrowser(article.url);
   }, [article.url]);
@@ -92,10 +95,10 @@ const NewsCard = memo(function NewsCard({ article, company, isCompact }: NewsCar
   const isRecent = Date.now() - new Date(article.publishedAt).getTime() < 3600000; // < 1 hour
 
   return (
-    <button
+    <div
       onClick={handleClick}
       className={`
-        group relative block w-full text-left transition-all duration-200 active:scale-[0.98] active:opacity-90
+        group relative block w-full cursor-pointer text-left transition-all duration-200 active:scale-[0.98] active:opacity-90
         ${isCompact
           ? 'p-3.5 rounded-xl bg-white/40 dark:bg-white/[0.02] border border-gray-100/60 dark:border-gray-800/30 hover:bg-white/70 dark:hover:bg-white/[0.04]'
           : 'p-4 rounded-2xl bg-white dark:bg-white/[0.035] border border-gray-100/80 dark:border-gray-800/50 shadow-[0_1px_3px_rgb(0,0,0,0.02)] dark:shadow-none hover:shadow-[0_4px_16px_rgb(0,0,0,0.06)] hover:border-gray-200 dark:hover:border-gray-700/80'
@@ -166,11 +169,23 @@ const NewsCard = memo(function NewsCard({ article, company, isCompact }: NewsCar
                   NEW
                 </span>
               )}
+              {onToggleBookmark && (
+                <button
+                  onClick={onToggleBookmark}
+                  className={`p-1.5 -mr-1.5 rounded-full transition-colors ${
+                    isBookmarked
+                      ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20'
+                      : 'text-gray-300 dark:text-gray-600 hover:text-amber-500 active:bg-gray-100 dark:active:bg-gray-800'
+                  }`}
+                >
+                  <Bookmark size={14} className={isBookmarked ? 'fill-current' : ''} />
+                </button>
+              )}
             </div>
           </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 });
 
@@ -222,6 +237,9 @@ interface RecentNewsFeedProps {
 }
 
 export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCounts }: RecentNewsFeedProps) {
+  const [viewMode, setViewMode] = useState<'feed' | 'saved'>('feed');
+  const { bookmarks, toggleBookmark, isBookmarked } = useBookmarks();
+
   const { priorityNews, otherNews, isLoading, refetch } = useRecentNews(
     allCompanies,
     watchlistIds,
@@ -250,23 +268,87 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
       >
         <div className="flex flex-col min-h-full">
           {/* ─── Pull-to-refresh header ─── */}
-      <div className="flex items-center justify-between px-4 py-2 mb-1 shrink-0">
-        <div className="flex items-center gap-2">
-          <TrendingUp size={16} className="text-blue-500 dark:text-blue-400" />
-          <h1 className="text-[17px] font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">
-            Market News
-          </h1>
+      <div className="flex flex-col px-4 pt-2 pb-3 mb-1 shrink-0 gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <TrendingUp size={16} className="text-blue-500 dark:text-blue-400" />
+            <h1 className="text-[17px] font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">
+              Market News
+            </h1>
+          </div>
+          <button
+            onClick={refetch}
+            disabled={isLoading && viewMode === 'feed'}
+            className="p-2 rounded-xl text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all disabled:opacity-40"
+            aria-label="Refresh news"
+          >
+            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+          </button>
         </div>
-        <button
-          onClick={refetch}
-          disabled={isLoading}
-          className="p-2 rounded-xl text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all disabled:opacity-40"
-          aria-label="Refresh news"
-        >
-          <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-        </button>
+        
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-2 bg-gray-100/80 dark:bg-gray-800/50 p-1 rounded-xl">
+          <button
+            onClick={() => setViewMode('feed')}
+            className={`flex-1 py-1.5 text-[13px] font-bold rounded-lg transition-all ${
+              viewMode === 'feed'
+                ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100'
+                : 'text-gray-500 dark:text-gray-400 opacity-80'
+            }`}
+          >
+            Live Feed
+          </button>
+          <button
+            onClick={() => setViewMode('saved')}
+            className={`flex-1 py-1.5 text-[13px] font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              viewMode === 'saved'
+                ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100'
+                : 'text-gray-500 dark:text-gray-400 opacity-80'
+            }`}
+          >
+            Saved
+            {bookmarks.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-gray-800 text-amber-600 dark:text-amber-400 text-[10px] leading-tight">
+                {bookmarks.length}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
+      {viewMode === 'saved' ? (
+        <div className="px-3 sm:px-4 flex-1">
+          {bookmarks.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center py-16 px-6">
+              <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center mb-5">
+                <Bookmark size={28} className="text-amber-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 mb-2 text-center">
+                No saved articles
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-center leading-relaxed">
+                Articles you bookmark will appear offline here for reading later.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2.5 pb-6">
+              {bookmarks.map((item) => (
+                <NewsCard
+                  key={`b-${item.article.id || item.article.url}`}
+                  article={item.article}
+                  company={item.company}
+                  isBookmarked={true}
+                  onToggleBookmark={(e) => {
+                    e.stopPropagation();
+                    toggleBookmark(item);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
       {/* ─── Loading State ─── */}
       {isLoading && priorityNews.length === 0 && otherNews.length === 0 && (
         <div className="space-y-6 px-3 sm:px-4">
@@ -331,9 +413,14 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
           <div className="space-y-2.5">
             {priorityNews.map((item) => (
               <NewsCard
-                key={`p-${item.article.id}-${item.company.id}`}
+                key={`p-${item.article.id || item.article.url}-${item.company.id}`}
                 article={item.article}
                 company={item.company}
+                isBookmarked={isBookmarked(item.article.url)}
+                onToggleBookmark={(e) => {
+                  e.stopPropagation();
+                  toggleBookmark(item);
+                }}
               />
             ))}
           </div>
@@ -358,14 +445,21 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
           <div className="space-y-2">
             {otherNews.map((item) => (
               <NewsCard
-                key={`o-${item.article.id}-${item.company.id}`}
+                key={`o-${item.article.id || item.article.url}-${item.company.id}`}
                 article={item.article}
                 company={item.company}
                 isCompact
+                isBookmarked={isBookmarked(item.article.url)}
+                onToggleBookmark={(e) => {
+                  e.stopPropagation();
+                  toggleBookmark(item);
+                }}
               />
             ))}
           </div>
         </section>
+      )}
+        </>
       )}
         </div>
       </div>
