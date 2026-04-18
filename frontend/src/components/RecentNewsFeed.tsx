@@ -117,13 +117,37 @@ const NewsCard = memo(function NewsCard({ article, company, isCompact }: NewsCar
           {/* Metadata: Ticker · Source · Time */}
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="font-extrabold text-[12px] tracking-wide text-gray-900 dark:text-gray-100 uppercase shrink-0">
+              <span className="font-extrabold text-[12px] tracking-wide text-gray-900 dark:text-gray-100 uppercase truncate">
                 {company.symbol}
               </span>
               <span className="w-[3px] h-[3px] rounded-full bg-gray-300 dark:bg-gray-600 shrink-0" />
               <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium truncate">
                 {article.source}
               </span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0 pl-2">
+              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium tabular-nums">
+                {timeAgo}
+              </span>
+            </div>
+          </div>
+
+          {/* Headline */}
+          <h3
+            className={`
+              font-semibold leading-[1.45] text-gray-800 dark:text-gray-200 
+              group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors
+              ${isCompact ? 'text-[13px] line-clamp-2' : 'text-[14px] sm:text-[15px] line-clamp-3'}
+            `}
+          >
+            {article.title}
+          </h3>
+
+          {/* Read indicator & Badges */}
+          <div className="flex items-center justify-between mt-2.5">
+            <div className="flex items-center gap-1 text-[10px] text-gray-300 dark:text-gray-600 group-hover:text-blue-400 dark:group-hover:text-blue-500 transition-colors">
+              <Newspaper size={10} />
+              <span className="font-medium">Read article</span>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               {article.sentiment === 'bullish' && (
@@ -142,27 +166,7 @@ const NewsCard = memo(function NewsCard({ article, company, isCompact }: NewsCar
                   NEW
                 </span>
               )}
-              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium tabular-nums">
-                {timeAgo}
-              </span>
             </div>
-          </div>
-
-          {/* Headline */}
-          <h3
-            className={`
-              font-semibold leading-[1.45] text-gray-800 dark:text-gray-200 
-              group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors
-              ${isCompact ? 'text-[13px] line-clamp-2' : 'text-[14px] sm:text-[15px] line-clamp-3'}
-            `}
-          >
-            {article.title}
-          </h3>
-
-          {/* Read indicator on hover */}
-          <div className="flex items-center gap-1 mt-2 text-[10px] text-gray-300 dark:text-gray-600 group-hover:text-blue-400 dark:group-hover:text-blue-500 transition-colors">
-            <Newspaper size={10} />
-            <span className="font-medium">Read article</span>
           </div>
         </div>
       </div>
