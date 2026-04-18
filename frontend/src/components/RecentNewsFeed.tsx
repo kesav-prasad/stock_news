@@ -371,7 +371,7 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
                 </div>
               ) : (
                 <p className="text-[13px] sm:text-[14px] leading-relaxed font-medium text-gray-700 dark:text-gray-300">
-                  {briefing}
+                  {briefing || "The AI is analyzing the latest market data. Check back shortly for your personalized summary."}
                 </p>
               )}
             </div>
