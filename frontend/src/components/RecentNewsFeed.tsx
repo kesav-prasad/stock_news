@@ -94,7 +94,7 @@ const NewsCard = memo(function NewsCard({ article, company, isCompact }: NewsCar
     <button
       onClick={handleClick}
       className={`
-        group relative block w-full text-left transition-all duration-200
+        group relative block w-full text-left transition-all duration-200 active:scale-[0.98] active:opacity-90
         ${isCompact
           ? 'p-3.5 rounded-xl bg-white/40 dark:bg-white/[0.02] border border-gray-100/60 dark:border-gray-800/30 hover:bg-white/70 dark:hover:bg-white/[0.04]'
           : 'p-4 rounded-2xl bg-white dark:bg-white/[0.035] border border-gray-100/80 dark:border-gray-800/50 shadow-[0_1px_3px_rgb(0,0,0,0.02)] dark:shadow-none hover:shadow-[0_4px_16px_rgb(0,0,0,0.06)] hover:border-gray-200 dark:hover:border-gray-700/80'
@@ -228,8 +228,13 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
   }, [watchlistIds.size, Object.keys(visitedCounts).length]);
 
   return (
-    <div className="flex-1 w-full flex flex-col pt-1 pb-6 overflow-y-auto overscroll-contain h-full min-h-0">
-      {/* ─── Pull-to-refresh header ─── */}
+    <div className="flex-1 w-full relative min-h-0 h-full">
+      <div 
+        className="absolute inset-0 overflow-y-auto overscroll-contain pt-1 pb-16"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
+        <div className="flex flex-col min-h-full">
+          {/* ─── Pull-to-refresh header ─── */}
       <div className="flex items-center justify-between px-4 py-2 mb-1 shrink-0">
         <div className="flex items-center gap-2">
           <TrendingUp size={16} className="text-blue-500 dark:text-blue-400" />
@@ -347,6 +352,8 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
           </div>
         </section>
       )}
+        </div>
+      </div>
     </div>
   );
 }

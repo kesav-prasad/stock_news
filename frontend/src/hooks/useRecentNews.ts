@@ -91,25 +91,36 @@ export function useRecentNews(
   }, [allCompanies]);
 
   const fetchNewsForCompany = useCallback(
-    async (companyId: string): Promise<NewsArticle[]> => {
+    async (companyId: string, forceFetch = false): Promise<NewsArticle[]> => {
       // 1. Try cache first
       const cached = getCachedNews(companyId);
-      if (cached && cached.length > 0 && !isNewsCacheStale(companyId)) {
+      
+      // If we have cache and we aren't forcing a hard refresh, return it instantly
+      if (!forceFetch && cached && cached.length > 0) {
+        // If it's stale, fetch in the background silently
+        if (isOnline() && isNewsCacheStale(companyId)) {
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://stocknews-backend.onrender.com';
+          resilientFetch(`${baseUrl}/api/companies/${companyId}/news`, {
+            timeoutMs: 10000,
+            retries: 0,
+          }).then(res => res.json()).then(fresh => {
+            if (Array.isArray(fresh) && fresh.length > 0) setCachedNews(companyId, fresh);
+          }).catch(() => {}); // silent fail in background
+        }
         return cached;
       }
 
-      // 2. Network fetch
+      // 2. Network fetch required
       if (!isOnline()) {
         return cached || [];
       }
 
       try {
-        const baseUrl =
-          process.env.NEXT_PUBLIC_API_URL || 'https://stocknews-backend.onrender.com';
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://stocknews-backend.onrender.com';
         const res = await resilientFetch(`${baseUrl}/api/companies/${companyId}/news`, {
-          timeoutMs: 20000,
-          retries: 1,
-          retryDelayMs: 2000,
+          timeoutMs: forceFetch ? 15000 : 8000, // Shorter timeout for initial loads
+          retries: forceFetch ? 1 : 0,
+          retryDelayMs: 1000,
         });
         const freshNews = await res.json();
         if (Array.isArray(freshNews) && freshNews.length > 0) {
@@ -132,17 +143,15 @@ export function useRecentNews(
     async function fetchAll() {
       setIsLoading(true);
 
-      // Limit priority companies to top 15 to avoid too many network calls
+      const isForced = fetchKey > 0;
       const priorityIds = priorityCompanyIds.slice(0, 15);
 
-      // Fetch priority and other in parallel batches
       const [priorityResults, otherResults] = await Promise.all([
         Promise.all(
           priorityIds.map(async (id) => {
-            const articles = await fetchNewsForCompany(id);
+            const articles = await fetchNewsForCompany(id, isForced);
             const company = companyMap.get(id);
             if (!company || articles.length === 0) return [];
-            // Take up to 3 most recent articles per company
             return articles.slice(0, 3).map((a) => ({
               article: a,
               company: { id: company.id, name: company.name, symbol: company.symbol },
@@ -151,10 +160,9 @@ export function useRecentNews(
         ),
         Promise.all(
           otherCompanyIds.map(async (id) => {
-            const articles = await fetchNewsForCompany(id);
+            const articles = await fetchNewsForCompany(id, isForced);
             const company = companyMap.get(id);
             if (!company || articles.length === 0) return [];
-            // Take up to 2 most recent articles per company
             return articles.slice(0, 2).map((a) => ({
               article: a,
               company: { id: company.id, name: company.name, symbol: company.symbol },
