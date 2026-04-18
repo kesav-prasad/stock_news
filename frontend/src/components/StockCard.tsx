@@ -27,10 +27,10 @@ const StockCard = memo(function StockCard({ company, onSelect, isWatchlisted, on
   return (
     <div
       onClick={handleSelect}
-      className={`group relative bg-white dark:bg-gray-900/80 border overflow-hidden rounded-xl cursor-pointer will-change-auto ${
+      className={`group relative border overflow-hidden rounded-xl cursor-pointer will-change-auto transition-all duration-200 active:scale-[0.97] active:opacity-80 active:bg-gray-100 dark:active:bg-gray-800 ${
         isWatchlisted
-          ? 'border-amber-300 dark:border-amber-600/50'
-          : 'border-gray-200 dark:border-gray-800'
+          ? 'bg-amber-50/10 dark:bg-amber-900/10 border-amber-300 dark:border-amber-600/50'
+          : 'bg-white dark:bg-gray-900/80 border-gray-200 dark:border-gray-800'
       }`}
       style={{ height: '100%' }}
     >
