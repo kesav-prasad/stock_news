@@ -5,6 +5,8 @@ import { Flame, Globe, Newspaper, RefreshCw, TrendingUp, Zap, Bookmark, Sparkles
 import { useRecentNews } from '@/hooks/useRecentNews';
 import { useBookmarks } from '@/hooks/useBookmarks';
 import { useBriefing } from '@/hooks/useBriefing';
+import { useSparkline } from '@/hooks/useSparkline';
+import Sparkline from './Sparkline';
 import { openInAppBrowser } from '@/lib/inAppBrowser';
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -87,6 +89,8 @@ interface NewsCardProps {
 }
 
 const NewsCard = memo(function NewsCard({ article, company, isCompact, isBookmarked, onToggleBookmark }: NewsCardProps) {
+  const { data: sparklineData, isPositive } = useSparkline(company.id);
+
   const handleClick = useCallback(() => {
     openInAppBrowser(article.url);
   }, [article.url]);
@@ -149,9 +153,18 @@ const NewsCard = memo(function NewsCard({ article, company, isCompact, isBookmar
 
           {/* Read indicator & Badges */}
           <div className="flex items-center justify-between mt-2.5">
-            <div className="flex items-center gap-1 text-[10px] text-gray-300 dark:text-gray-600 group-hover:text-blue-400 dark:group-hover:text-blue-500 transition-colors">
-              <Newspaper size={10} />
-              <span className="font-medium">Read article</span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 text-[10px] text-gray-300 dark:text-gray-600 group-hover:text-blue-400 dark:group-hover:text-blue-500 transition-colors">
+                <Newspaper size={10} />
+                <span className="font-medium mr-1">Read</span>
+              </div>
+              
+              {/* Sparkline explicitly pushed into the layout */}
+              {!isCompact && sparklineData && sparklineData.length > 0 && (
+                <div className="hidden sm:block pointer-events-none mt-0.5">
+                  <Sparkline data={sparklineData} isPositive={isPositive} width={45} height={16} />
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               {article.sentiment === 'bullish' && (
