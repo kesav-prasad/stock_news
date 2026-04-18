@@ -207,12 +207,9 @@ app.get('/api/companies/:id/historical', async (req, res) => {
   }
 });
 
-import OpenAI from 'openai';
-
-const PORT = process.env.PORT || 4000;
-
 // ★ AI Morning Briefing Generator
-const openai = new OpenAI();
+// NOTE: OpenAI is lazy-imported inside the handler to prevent server crash
+// when OPENAI_API_KEY is not set (e.g. on Render where .env is gitignored)
 app.post('/api/briefing', async (req, res) => {
   try {
     const { articles } = req.body;
@@ -221,12 +218,21 @@ app.post('/api/briefing', async (req, res) => {
       return;
     }
 
+    // Build a smart fallback briefing from headlines
+    const fallbackBriefing = articles.length >= 2
+      ? `${articles[0].title}. Meanwhile, ${articles[1].title.toLowerCase()}.`
+      : `Market Update: ${articles[0].title}. Monitor your watchlist for further developments.`;
+
     if (!process.env.OPENAI_API_KEY) {
-      res.json({ briefing: `Market Update: ${articles[0].title}. Monitor your watchlist for further developments on these fronts.` });
+      res.json({ briefing: fallbackBriefing });
       return;
     }
 
-    const prompt = `You are an elite financial analyst. Write an extremely concise, premium-feeling 2-sentence morning briefing summarizing these headlines. Do not use filler words. Be direct and insightful:\n\n` + 
+    // Lazy-init OpenAI only when we actually have a key
+    const OpenAI = (await import('openai')).default;
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const prompt = `You are an elite financial analyst. Write an extremely concise, premium-feeling 2-sentence morning briefing summarizing these headlines. Do not use filler words. Be direct and insightful:\n\n` +
       articles.slice(0, 5).map((a: any) => `- ${a.title}`).join('\n');
 
     const completion = await openai.chat.completions.create({
@@ -235,13 +241,17 @@ app.post('/api/briefing', async (req, res) => {
       max_tokens: 100
     });
 
-    res.json({ briefing: completion.choices[0].message.content?.trim() || "Market conditions remain dynamic." });
+    res.json({ briefing: completion.choices[0].message.content?.trim() || fallbackBriefing });
   } catch (err) {
     console.error("OpenAI Briefing error:", err);
-    res.json({ briefing: req.body.articles?.[0]?.title ? `Top Story: ${req.body.articles[0].title}.` : "Market conditions remain dynamic." });
+    const fallback = req.body.articles?.[0]?.title
+      ? `Top Story: ${req.body.articles[0].title}.`
+      : "Market conditions remain dynamic.";
+    res.json({ briefing: fallback });
   }
 });
 
+const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });

@@ -1,15 +1,32 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { resilientFetch } from '@/lib/offlineCache';
 
 const CACHE_KEY = 'sn_ai_briefing';
 const CACHE_TTL = 1000 * 60 * 60 * 12; // 12 hours
 
+/**
+ * Generate a smart client-side briefing from headlines
+ * Used as an immediate fallback when the API is unreachable
+ */
+function generateLocalBriefing(articles: any[]): string {
+  if (!articles || articles.length === 0) return '';
+  
+  const headlines = articles.slice(0, 3).map(a => a.article?.title || a.title).filter(Boolean);
+  
+  if (headlines.length >= 2) {
+    return `${headlines[0]}. Meanwhile, ${headlines[1].charAt(0).toLowerCase()}${headlines[1].slice(1)}.`;
+  }
+  return `Market Update: ${headlines[0]}. Monitor your watchlist for further developments.`;
+}
+
 export function useBriefing(articles: any[]) {
   const [briefing, setBriefing] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const hasFetched = useRef(false);
 
   useEffect(() => {
     if (!articles || articles.length === 0) return;
+    if (hasFetched.current) return;
 
     // Check cache first
     try {
@@ -25,19 +42,20 @@ export function useBriefing(articles: any[]) {
       // ignore
     }
 
-    // Only hit API if we actually have priority articles
+    hasFetched.current = true;
+
     const fetchBriefing = async () => {
       setIsLoading(true);
       try {
         const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://stocknews-backend.onrender.com';
         
         const payload = articles.slice(0, 5).map(a => ({
-          title: a.article.title,
-          source: a.article.source
+          title: a.article?.title || '',
+          source: a.article?.source || ''
         }));
 
         const res = await resilientFetch(`${baseUrl}/api/briefing`, {
-          timeoutMs: 15000,
+          timeoutMs: 12000,
           retries: 1,
           fetchOptions: {
             method: 'POST',
@@ -56,7 +74,17 @@ export function useBriefing(articles: any[]) {
           }));
         }
       } catch (err) {
-        console.error('Briefing fetch failed:', err);
+        console.error('Briefing API failed, using local fallback:', err);
+        // Generate a smart local briefing instead of showing nothing
+        const localBriefing = generateLocalBriefing(articles);
+        if (localBriefing) {
+          setBriefing(localBriefing);
+          // Cache with shorter TTL (1 hour) since it's local-generated
+          localStorage.setItem(CACHE_KEY, JSON.stringify({
+            data: localBriefing,
+            timestamp: Date.now() - (CACHE_TTL - 1000 * 60 * 60)
+          }));
+        }
       } finally {
         setIsLoading(false);
       }
