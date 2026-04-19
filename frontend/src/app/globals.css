@@ -14,9 +14,12 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Force dark mode by default for the app */
-  html {
+  /* Respect color schemes based on class */
+  html.dark {
     color-scheme: dark;
+  }
+  html {
+    color-scheme: light;
   }
 }
 
@@ -110,4 +113,13 @@ svg *:focus {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(128, 128, 128, 0.5);
+}
+
+/* Hide scrollbar for horizontal scroll containers */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

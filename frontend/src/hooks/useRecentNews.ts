@@ -81,7 +81,7 @@ export function useRecentNews(
     return allCompanies
       .filter((c) => isDefaultPoolSymbol(c.symbol) && !prioritySet.has(c.id))
       .map((c) => c.id)
-      .slice(0, 12); // Cap at 12 to keep load manageable
+      .slice(0, 5); // Reduced cap to 5 to massively improve load speeds
   }, [allCompanies, priorityCompanyIds]);
 
   // Map for quick company lookup
@@ -145,55 +145,80 @@ export function useRecentNews(
       setIsLoading(true);
 
       const isForced = fetchKey > 0;
-      const priorityIds = priorityCompanyIds.slice(0, 15);
+      const priorityIds = priorityCompanyIds.slice(0, 5); // Reduced from 15 to 5 for speed
+      
+      // Clear current state if forced refresh
+      if (isForced) {
+        setPriorityNews([]);
+        setOtherNews([]);
+      }
 
-      const [priorityResults, otherResults] = await Promise.all([
-        Promise.all(
-          priorityIds.map(async (id) => {
-            const articles = await fetchNewsForCompany(id, isForced);
-            const company = companyMap.get(id);
-            if (!company || articles.length === 0) return [];
-            return articles.slice(0, 3).map((a) => ({
-              article: a,
-              company: { id: company.id, name: company.name, symbol: company.symbol },
-            }));
-          }),
-        ),
-        Promise.all(
-          otherCompanyIds.map(async (id) => {
-            const articles = await fetchNewsForCompany(id, isForced);
-            const company = companyMap.get(id);
-            if (!company || articles.length === 0) return [];
-            return articles.slice(0, 2).map((a) => ({
-              article: a,
-              company: { id: company.id, name: company.name, symbol: company.symbol },
-            }));
-          }),
-        ),
-      ]);
+      const processCompany = async (id: string, isPriority: boolean, limit: number) => {
+        const company = companyMap.get(id);
+        if (!company) return;
 
-      if (abortRef.current) return;
+        // Synchronously check cache for instant render
+        const cached = getCachedNews(id);
+        const hasCache = !isForced && cached && cached.length > 0;
+        
+        if (hasCache) {
+          const items = cached.slice(0, limit).map((a) => ({
+            article: a,
+            company: { id: company.id, name: company.name, symbol: company.symbol },
+          }));
+          
+          if (isPriority) {
+            setPriorityNews(prev => {
+              const combined = [...prev, ...items];
+              const unique = Array.from(new Map(combined.map(item => [item.article.id || item.article.url, item])).values());
+              return unique.sort((a, b) => new Date(b.article.publishedAt).getTime() - new Date(a.article.publishedAt).getTime());
+            });
+          } else {
+            setOtherNews(prev => {
+              const combined = [...prev, ...items];
+              const unique = Array.from(new Map(combined.map(item => [item.article.id || item.article.url, item])).values());
+              return unique.sort((a, b) => new Date(b.article.publishedAt).getTime() - new Date(a.article.publishedAt).getTime());
+            });
+          }
+        }
 
-      // Flatten and sort by date (newest first)
-      const flatPriority = priorityResults
-        .flat()
-        .sort(
-          (a, b) =>
-            new Date(b.article.publishedAt).getTime() -
-            new Date(a.article.publishedAt).getTime(),
-        );
+        // Await the fetch results
+        const articles = await fetchNewsForCompany(id, isForced);
+        if (abortRef.current || !articles || articles.length === 0) return;
 
-      const flatOther = otherResults
-        .flat()
-        .sort(
-          (a, b) =>
-            new Date(b.article.publishedAt).getTime() -
-            new Date(a.article.publishedAt).getTime(),
-        );
+        // If we didn't add from cache, or if we did a forced refresh, append network results
+        if (!hasCache || isForced) {
+          const items = articles.slice(0, limit).map((a) => ({
+            article: a,
+            company: { id: company.id, name: company.name, symbol: company.symbol },
+          }));
 
-      setPriorityNews(flatPriority);
-      setOtherNews(flatOther);
-      setIsLoading(false);
+          if (isPriority) {
+            setPriorityNews(prev => {
+              const combined = [...prev, ...items];
+              const unique = Array.from(new Map(combined.map(item => [item.article.id || item.article.url, item])).values());
+              return unique.sort((a, b) => new Date(b.article.publishedAt).getTime() - new Date(a.article.publishedAt).getTime());
+            });
+          } else {
+            setOtherNews(prev => {
+              const combined = [...prev, ...items];
+              const unique = Array.from(new Map(combined.map(item => [item.article.id || item.article.url, item])).values());
+              return unique.sort((a, b) => new Date(b.article.publishedAt).getTime() - new Date(a.article.publishedAt).getTime());
+            });
+          }
+        }
+      };
+
+      // Set up promises without blocking each other
+      const priorityPromises = priorityIds.map(id => processCompany(id, true, 3));
+      const otherPromises = otherCompanyIds.map(id => processCompany(id, false, 2));
+
+      // Wait for all to finish just to remove the loading state
+      await Promise.all([...priorityPromises, ...otherPromises]);
+
+      if (!abortRef.current) {
+        setIsLoading(false);
+      }
     }
 
     fetchAll();

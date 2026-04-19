@@ -76,7 +76,7 @@ export default function NewsPanel({ company }: { company: CompanyProps }) {
               <div
                 key={article.id}
                 onClick={() => handleOpenArticle(article.url)}
-                className="block w-full cursor-pointer text-left p-3 sm:p-4 rounded-lg sm:rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 hover:shadow-md active:bg-gray-100 dark:active:bg-gray-750 hover:border-blue-200 dark:hover:border-blue-800 transition-all active:scale-[0.98] active:opacity-90 group"
+                className="block w-full cursor-pointer text-left p-3 sm:p-4 rounded-lg sm:rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800 transition-all duration-150 active:translate-y-[2px] active:scale-[0.985] active:brightness-95 dark:active:brightness-105 active:shadow-none group"
               >
                 <div className="flex justify-between items-start mb-1.5 sm:mb-2 gap-2">
                   <span className="text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 truncate max-w-[60%]">
@@ -110,10 +110,10 @@ export default function NewsPanel({ company }: { company: CompanyProps }) {
                         e.stopPropagation();
                         toggleBookmark({ article, company });
                       }}
-                      className={`p-1.5 -mr-1.5 rounded-full transition-colors ${
+                      className={`p-1.5 -mr-1.5 rounded-full transition-all duration-300 active:scale-75 ${
                         isSaved
                           ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20'
-                          : 'text-gray-300 dark:text-gray-600 hover:text-amber-500 active:bg-gray-200 dark:active:bg-gray-700'
+                          : 'text-gray-300 dark:text-gray-600 hover:text-amber-500'
                       }`}
                     >
                       <Bookmark size={14} className={isSaved ? 'fill-current' : ''} />

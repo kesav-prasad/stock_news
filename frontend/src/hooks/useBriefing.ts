@@ -20,26 +20,35 @@ function generateLocalBriefing(articles: any[]): string {
 }
 
 export function useBriefing(articles: any[]) {
-  const [briefing, setBriefing] = useState<string | null>(null);
+  // Initialize from cache synchronously to prevent layout flashes and typewriter restarts
+  const [briefing, setBriefing] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cachedStr = localStorage.getItem(CACHE_KEY);
+        if (cachedStr) {
+          const cached = JSON.parse(cachedStr);
+          if (Date.now() - cached.timestamp < CACHE_TTL) {
+            return cached.data;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return null;
+  });
+  
   const [isLoading, setIsLoading] = useState(false);
   const hasFetched = useRef(false);
 
   useEffect(() => {
     if (!articles || articles.length === 0) return;
     if (hasFetched.current) return;
-
-    // Check cache first
-    try {
-      const cachedStr = localStorage.getItem(CACHE_KEY);
-      if (cachedStr) {
-        const cached = JSON.parse(cachedStr);
-        if (Date.now() - cached.timestamp < CACHE_TTL) {
-          setBriefing(cached.data);
-          return;
-        }
-      }
-    } catch {
-      // ignore
+    
+    // If we already have briefing from initial synchronous load, mark as fetched
+    if (briefing) {
+      hasFetched.current = true;
+      return;
     }
 
     hasFetched.current = true;

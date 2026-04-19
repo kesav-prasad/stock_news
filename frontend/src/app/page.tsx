@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useDeferredValue, useCallback, useTransition, useEffect } from 'react';
-import { Search, BarChart3, Heart, Star, Trash2, WifiOff, X, Clock } from 'lucide-react';
+import { Search, BarChart3, Heart, Star, Trash2, WifiOff, X, Clock, User, Moon, Sun } from 'lucide-react';
 import StockGrid from '@/components/StockGrid';
 import CompanyModal from '@/components/CompanyModal';
 import RecentNewsFeed from '@/components/RecentNewsFeed';
@@ -9,7 +9,7 @@ import { useWatchlist } from '@/hooks/useWatchlist';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useNewsNotifications } from '@/hooks/useNewsNotifications';
 import { useRecentCompanies } from '@/hooks/useRecentCompanies';
-import { SignInButton, UserButton, useUser } from '@clerk/clerk-react';
+import { useTheme } from 'next-themes';
 import { isOnline } from '@/lib/offlineCache';
 
 interface Company {
@@ -22,16 +22,55 @@ interface Company {
 
 type ViewTab = 'all' | 'watchlist' | 'recent';
 
+// ★ All 50 Nifty 50 NSE symbols
+const NIFTY_50_SYMBOLS = ['RELIANCE.NS','TCS.NS','HDFCBANK.NS','ICICIBANK.NS','BHARTIARTL.NS','INFY.NS','ITC.NS','SBIN.NS','HINDUNILVR.NS','HCLTECH.NS','BAJFINANCE.NS','LT.NS','KOTAKBANK.NS','MARUTI.NS','TATAMOTORS.NS','AXISBANK.NS','SUNPHARMA.NS','ADANIENT.NS','NTPC.NS','TITAN.NS','TATASTEEL.NS','ONGC.NS','POWERGRID.NS','BAJAJFINSV.NS','ASIANPAINT.NS','M&M.NS','ULTRACEMCO.NS','JSWSTEEL.NS','COALINDIA.NS','WIPRO.NS','NESTLEIND.NS','CIPLA.NS','DRREDDY.NS','ADANIPORTS.NS','HINDALCO.NS','TECHM.NS','APOLLOHOSP.NS','EICHERMOT.NS','GRASIM.NS','INDUSINDBK.NS','HEROMOTOCO.NS','BAJAJ-AUTO.NS','HDFCLIFE.NS','BRITANNIA.NS','TRENT.NS','BPCL.NS','TATACONSUM.NS','SHRIRAMFIN.NS','SBILIFE.NS','ETERNAL.NS'];
+
+const NIFTY_50_BSE_MAP: Record<string, string> = {'RELIANCE.NS':'500325.BO','TCS.NS':'532540.BO','HDFCBANK.NS':'532646.BO','ICICIBANK.NS':'532174.BO','BHARTIARTL.NS':'532838.BO','INFY.NS':'532684.BO','ITC.NS':'532694.BO','SBIN.NS':'500112.BO','HINDUNILVR.NS':'532654.BO','HCLTECH.NS':'532281.BO','BAJFINANCE.NS':'532466.BO','KOTAKBANK.NS':'532612.BO','TATAMOTORS.NS':'532800.BO','AXISBANK.NS':'532215.BO','SUNPHARMA.NS':'532710.BO','ADANIENT.NS':'532410.BO','TITAN.NS':'532820.BO','TATASTEEL.NS':'532810.BO','BAJAJFINSV.NS':'532468.BO','ASIANPAINT.NS':'532444.BO','ULTRACEMCO.NS':'532840.BO','JSWSTEEL.NS':'532702.BO','COALINDIA.NS':'532546.BO','CIPLA.NS':'532542.BO','DRREDDY.NS':'532584.BO','ADANIPORTS.NS':'532414.BO','HINDALCO.NS':'500106.BO','APOLLOHOSP.NS':'532434.BO','EICHERMOT.NS':'532588.BO','INDUSINDBK.NS':'532680.BO','HEROMOTOCO.NS':'532650.BO','BAJAJ-AUTO.NS':'532462.BO','HDFCLIFE.NS':'532648.BO','BRITANNIA.NS':'532510.BO','BPCL.NS':'532492.BO','SBILIFE.NS':'532850.BO'};
+
 // ★ Pre-build exchange indexes for instant O(1) filtering
 function buildExchangeIndexes(companies: Company[]) {
   const nse: Company[] = [];
   const bse: Company[] = [];
+  const nifty50: Company[] = [];
+  const nifty50Set = new Set<string>(NIFTY_50_SYMBOLS);
+
   for (let i = 0; i < companies.length; i++) {
     const c = companies[i];
     if (c.exchange === 'NSE') nse.push(c);
     else if (c.exchange === 'BSE') bse.push(c);
+    if (nifty50Set.has(c.symbol)) {
+      nifty50.push(c);
+    }
   }
-  return { NSE: nse, BSE: bse };
+  return { NSE: nse, BSE: bse, NIFTY50: nifty50 };
+}
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted) {
+    return <div className="w-[34px] h-[34px]" />;
+  }
+
+  return (
+    <button
+      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+      className="relative w-[34px] h-[34px] p-[2px] rounded-full bg-gradient-to-tr from-violet-500 via-fuchsia-500 to-blue-500 shadow-md group active:scale-95 transition-transform duration-200"
+      aria-label="Toggle theme"
+    >
+      <div className="absolute inset-0 bg-gradient-to-tr from-violet-500 via-fuchsia-500 to-blue-500 rounded-full blur-[6px] opacity-40 group-hover:opacity-75 transition-opacity duration-300 pointer-events-none"></div>
+      <div className="w-full h-full rounded-full bg-gradient-to-b from-white to-gray-50 dark:from-zinc-800 dark:to-zinc-900 flex items-center justify-center relative overflow-hidden shadow-inner">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 mix-blend-overlay"></div>
+        {theme === 'dark' ? (
+          <Moon size={15} className="text-gray-800 dark:text-gray-100 z-10 stroke-[2.5px] drop-shadow-sm" />
+        ) : (
+          <Sun size={15} className="text-gray-800 dark:text-gray-100 z-10 stroke-[2.5px] drop-shadow-sm" />
+        )}
+      </div>
+    </button>
+  );
 }
 
 export default function DashboardPage() {
@@ -40,6 +79,7 @@ export default function DashboardPage() {
   const [exchange, setExchange] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [activeTab, setActiveTab] = useState<ViewTab>('all');
+  const deferredTab = useDeferredValue(activeTab);
   const [isPending, startTransition] = useTransition();
   const [networkStatus, setNetworkStatus] = useState(true);
 
@@ -56,11 +96,9 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // ★ Wrap ALL filter changes in startTransition so UI stays responsive
+  // ★ Navbar tabs should update instantly for immediate visual feedback
   const handleTabChange = useCallback((tab: ViewTab) => {
-    startTransition(() => {
-      setActiveTab(tab);
-    });
+    setActiveTab(tab);
   }, []);
 
   const handleExchangeChange = useCallback((value: string) => {
@@ -95,7 +133,6 @@ export default function DashboardPage() {
     });
   });
 
-  const { isSignedIn } = useUser();
 
   // ★ OFFLINE-FIRST: Companies load with brief animation
   const { companies: allCompanies, total, isLoading: companiesLoading } = useCompanies();
@@ -107,14 +144,14 @@ export default function DashboardPage() {
   const displayedCompanies = useMemo(() => {
     // 1. Start with the right base list based on exchange filter
     let list: Company[];
-    if (exchange && exchangeIndexes[exchange as 'NSE' | 'BSE']) {
-      list = exchangeIndexes[exchange as 'NSE' | 'BSE'];
+    if (exchange && exchangeIndexes[exchange as 'NSE' | 'BSE' | 'NIFTY50']) {
+      list = exchangeIndexes[exchange as 'NSE' | 'BSE' | 'NIFTY50'];
     } else {
       list = allCompanies;
     }
 
     // 2. Watchlist filter (Recent tab handles its own data via useRecentNews)
-    if (activeTab === 'watchlist') {
+    if (deferredTab === 'watchlist') {
       list = list.filter((c) => watchlistIds.has(c.id));
     }
 
@@ -127,17 +164,17 @@ export default function DashboardPage() {
     }
 
     return list;
-  }, [activeTab, allCompanies, exchangeIndexes, watchlistIds, exchange, deferredSearchTerm]);
+  }, [deferredTab, allCompanies, exchangeIndexes, watchlistIds, exchange, deferredSearchTerm]);
 
   const statsText = useMemo(() => {
-    if (activeTab === 'watchlist') {
+    if (deferredTab === 'watchlist') {
       return `${displayedCompanies.length} in watchlist`;
     }
-    if (activeTab === 'recent') {
+    if (deferredTab === 'recent') {
       return `${displayedCompanies.length} recently viewed`;
     }
     return `${displayedCompanies.length} of ${total}`;
-  }, [activeTab, displayedCompanies.length, total]);
+  }, [deferredTab, displayedCompanies.length, total]);
 
   const handleSelectCompany = useCallback((c: Company) => {
     recordVisit(c.id);
@@ -171,20 +208,7 @@ export default function DashboardPage() {
               </h1>
             </div>
 
-            {/* Auth */}
-            <div className="flex items-center">
-              {!isSignedIn ? (
-                <SignInButton mode="modal">
-                  <button className="text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-xl">
-                    Sign In
-                  </button>
-                </SignInButton>
-              ) : (
-                <div className="flex items-center justify-center p-0.5 rounded-full bg-gray-100 dark:bg-gray-800 ring-2 ring-white dark:ring-gray-950">
-                  <UserButton />
-                </div>
-              )}
-            </div>
+            <ThemeToggle />
           </div>
 
           {/* Search bar — full width */}
@@ -209,20 +233,21 @@ export default function DashboardPage() {
           </div>
 
           {/* Exchange filter chips + stats — ★ wrapped in startTransition */}
-          {activeTab === 'all' && (
-            <div className="flex items-center gap-2">
-              <div className="flex gap-1.5">
+          {deferredTab === 'all' && (
+            <div className="flex items-center gap-2 overflow-hidden">
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1 -mb-1 max-w-full">
                 {[
                   { label: 'All', value: '' },
+                  { label: 'Nifty 50', value: 'NIFTY50' },
                   { label: 'NSE', value: 'NSE' },
                   { label: 'BSE', value: 'BSE' },
                 ].map((item) => (
                   <button
                     key={item.value}
                     onClick={() => handleExchangeChange(item.value)}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold ${
+                    className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 transition-colors duration-150 ${
                       exchange === item.value
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-blue-600 text-white shadow-sm'
                         : 'bg-gray-100 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400'
                     }`}
                   >
@@ -231,14 +256,12 @@ export default function DashboardPage() {
                 ))}
               </div>
 
-              <span className="ml-auto text-xs font-medium text-gray-400 dark:text-gray-500 tabular-nums">
-                {statsText}
-              </span>
+              {/* Stats text hidden as requested */}
             </div>
           )}
 
           {/* Watchlist header */}
-          {activeTab === 'watchlist' && (
+          {deferredTab === 'watchlist' && (
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
                 Your Watchlist
@@ -264,9 +287,9 @@ export default function DashboardPage() {
 
       {/* ====== MAIN CONTENT ====== */}
       <main className="flex-1 overflow-hidden flex flex-col pb-16 min-h-0">
-        <div className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8 py-2 sm:py-3 flex flex-col overflow-hidden min-h-0">
+        <div className={`flex-1 max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8 py-2 sm:py-3 flex flex-col overflow-hidden min-h-0 transition-opacity duration-150 ${activeTab !== deferredTab ? 'opacity-60' : 'opacity-100'}`}>
           {/* Recent tab — the component handles its own data + loading internally */}
-          {activeTab === 'recent' ? (
+          {deferredTab === 'recent' ? (
             <RecentNewsFeed
               allCompanies={allCompanies}
               watchlistIds={watchlistIds}
@@ -295,7 +318,7 @@ export default function DashboardPage() {
                 <div className="text-gray-500 font-medium text-sm">
                   No companies match your search.
                 </div>
-              ) : activeTab === 'watchlist' ? (
+              ) : deferredTab === 'watchlist' ? (
                 <div className="flex flex-col items-center text-center max-w-sm">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 flex items-center justify-center mb-4">
                     <Star size={28} className="text-amber-500" />
