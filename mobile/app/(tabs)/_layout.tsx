@@ -49,6 +49,19 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="portfolio"
+          options={{
+            title: 'Portfolio',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? 'briefcase' : 'briefcase-outline'}
+                size={22}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="watchlist"
           options={{
             title: 'Watchlist',

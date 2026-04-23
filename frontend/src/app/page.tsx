@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useMemo, useDeferredValue, useCallback, useTransition, useEffect } from 'react';
-import { Search, BarChart3, Heart, Star, Trash2, WifiOff, X, Clock, User, Moon, Sun } from 'lucide-react';
+import { Search, BarChart3, Heart, Star, Trash2, WifiOff, X, Clock, User, Moon, Sun, Briefcase } from 'lucide-react';
 import StockGrid from '@/components/StockGrid';
 import CompanyModal from '@/components/CompanyModal';
 import RecentNewsFeed from '@/components/RecentNewsFeed';
+import PortfolioView from '@/components/PortfolioView';
 import { useWatchlist } from '@/hooks/useWatchlist';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useNewsNotifications } from '@/hooks/useNewsNotifications';
@@ -20,7 +21,7 @@ interface Company {
   sector?: string;
 }
 
-type ViewTab = 'all' | 'watchlist' | 'recent';
+type ViewTab = 'all' | 'watchlist' | 'recent' | 'portfolio';
 
 // ★ All 50 Nifty 50 NSE symbols
 const NIFTY_50_SYMBOLS = ['RELIANCE.NS','TCS.NS','HDFCBANK.NS','ICICIBANK.NS','BHARTIARTL.NS','INFY.NS','ITC.NS','SBIN.NS','HINDUNILVR.NS','HCLTECH.NS','BAJFINANCE.NS','LT.NS','KOTAKBANK.NS','MARUTI.NS','TATAMOTORS.NS','AXISBANK.NS','SUNPHARMA.NS','ADANIENT.NS','NTPC.NS','TITAN.NS','TATASTEEL.NS','ONGC.NS','POWERGRID.NS','BAJAJFINSV.NS','ASIANPAINT.NS','M&M.NS','ULTRACEMCO.NS','JSWSTEEL.NS','COALINDIA.NS','WIPRO.NS','NESTLEIND.NS','CIPLA.NS','DRREDDY.NS','ADANIPORTS.NS','HINDALCO.NS','TECHM.NS','APOLLOHOSP.NS','EICHERMOT.NS','GRASIM.NS','INDUSINDBK.NS','HEROMOTOCO.NS','BAJAJ-AUTO.NS','HDFCLIFE.NS','BRITANNIA.NS','TRENT.NS','BPCL.NS','TATACONSUM.NS','SHRIRAMFIN.NS','SBILIFE.NS','ETERNAL.NS'];
@@ -288,8 +289,10 @@ export default function DashboardPage() {
       {/* ====== MAIN CONTENT ====== */}
       <main className="flex-1 overflow-hidden flex flex-col pb-16 min-h-0">
         <div className={`flex-1 max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8 py-2 sm:py-3 flex flex-col overflow-hidden min-h-0 transition-opacity duration-150 ${activeTab !== deferredTab ? 'opacity-60' : 'opacity-100'}`}>
-          {/* Recent tab — the component handles its own data + loading internally */}
-          {deferredTab === 'recent' ? (
+          {/* Portfolio tab */}
+          {deferredTab === 'portfolio' ? (
+            <PortfolioView />
+          ) : deferredTab === 'recent' ? (
             <RecentNewsFeed
               allCompanies={allCompanies}
               watchlistIds={watchlistIds}
@@ -374,6 +377,18 @@ export default function DashboardPage() {
           >
             <Clock size={22} className={activeTab === 'recent' ? 'stroke-[2.5px]' : ''} />
             <span className="text-[10px] font-semibold">Recent</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('portfolio')}
+            className={`flex-1 flex flex-col items-center gap-1 py-2.5 pt-3 transition-colors ${
+              activeTab === 'portfolio'
+                ? 'text-blue-600 dark:text-blue-400'
+                : 'text-gray-400 dark:text-gray-500'
+            }`}
+          >
+            <Briefcase size={22} className={activeTab === 'portfolio' ? 'stroke-[2.5px]' : ''} />
+            <span className="text-[10px] font-semibold">Portfolio</span>
           </button>
 
           <button

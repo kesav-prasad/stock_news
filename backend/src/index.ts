@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { fetchNewsForCompany } from './services/aiNewsService';
 import { fetchStockQuote, fetchHistoricalData } from './services/marketDataService';
+import { AngelOneService } from './services/angelOneService';
 import { ClerkExpressRequireAuth, StrictAuthProp } from '@clerk/clerk-sdk-node';
 
 declare global {
@@ -248,6 +249,36 @@ app.post('/api/briefing', async (req, res) => {
       ? `Top Story: ${req.body.articles[0].title}.`
       : "Market conditions remain dynamic.";
     res.json({ briefing: fallback });
+  }
+});
+
+// ==========================================
+// ★ BROKER INTEGRATION (ANGEL ONE)
+// ==========================================
+
+// Stateless Fetch holdings (Proxy to Angel One)
+app.post('/api/broker/holdings', async (req: any, res) => {
+  try {
+    const { apiKey, clientId, pin, totpSecret } = req.body;
+    
+    if (!apiKey || !clientId || !pin || !totpSecret) {
+      res.status(400).json({ error: 'Missing broker credentials' });
+      return;
+    }
+
+    const angelOneService = new AngelOneService({
+      apiKey,
+      clientId,
+      pin,
+      totpSecret
+    });
+
+    // Fetches live from Angel One
+    const holdings = await angelOneService.getHoldings();
+    res.json({ success: true, holdings });
+  } catch (err: any) {
+    console.error('[Broker Holdings] Error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch holdings', message: err.message });
   }
 });
 
