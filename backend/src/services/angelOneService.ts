@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import { TOTP } from 'totp-generator';
 
 const BASE_URL = 'https://apiconnect.angelbroking.com/rest';
@@ -43,7 +42,7 @@ export class AngelOneService {
    */
   async login(): Promise<void> {
     try {
-      const totp = this.generateTotp();
+      const totp = await this.generateTotp();
       
       const response = await fetch(`${BASE_URL}/auth/angelbroking/user/v1/loginByPassword`, {
         method: 'POST',
