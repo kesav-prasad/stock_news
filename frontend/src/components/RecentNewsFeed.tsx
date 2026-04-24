@@ -1,12 +1,10 @@
 'use client';
 
-import { memo, useCallback, useMemo, useState } from 'react';
-import { Flame, Globe, Newspaper, RefreshCw, TrendingUp, Zap, Bookmark, Sparkles } from 'lucide-react';
+import { memo, useCallback, useState } from 'react';
+import { Globe, Newspaper, RefreshCw, TrendingUp, Zap, Bookmark, Sparkles } from 'lucide-react';
 import { useRecentNews } from '@/hooks/useRecentNews';
 import { useBookmarks } from '@/hooks/useBookmarks';
 import { useBriefing } from '@/hooks/useBriefing';
-import { useSparkline } from '@/hooks/useSparkline';
-import Sparkline from './Sparkline';
 import TypewriterText from './TypewriterText';
 import { openInAppBrowser } from '@/lib/inAppBrowser';
 
@@ -84,19 +82,16 @@ interface NewsCardProps {
     name: string;
     symbol: string;
   };
-  isCompact?: boolean;
   isBookmarked?: boolean;
   onToggleBookmark?: (e: React.MouseEvent) => void;
 }
 
-const NewsCard = memo(function NewsCard({ article, company, isCompact, isBookmarked, onToggleBookmark }: NewsCardProps) {
-  const { data: sparklineData, isPositive } = useSparkline(company.id);
-
+const NewsCard = memo(function NewsCard({ article, company, isBookmarked, onToggleBookmark }: NewsCardProps) {
   const handleClick = useCallback(() => {
     openInAppBrowser(article.url);
   }, [article.url]);
 
-  const gradient = getTickerGradient(company.symbol);
+  const gradient = getTickerGradient(article.source);
   const timeAgo = formatTimeAgo(article.publishedAt);
   const isRecent = Date.now() - new Date(article.publishedAt).getTime() < 3600000; // < 1 hour
 
@@ -105,36 +100,33 @@ const NewsCard = memo(function NewsCard({ article, company, isCompact, isBookmar
       onClick={handleClick}
       className={`
         group relative block w-full cursor-pointer text-left transition-all duration-150 active:translate-y-[2px] active:scale-[0.985] active:brightness-95 dark:active:brightness-105 active:shadow-none
-        ${isCompact
-          ? 'p-3.5 rounded-xl bg-white/40 dark:bg-white/[0.02] border border-gray-100/60 dark:border-gray-800/30 hover:bg-white/70 dark:hover:bg-white/[0.04]'
-          : 'p-4 rounded-2xl bg-white dark:bg-white/[0.035] border border-gray-100/80 dark:border-gray-800/50 shadow-[0_1px_3px_rgb(0,0,0,0.02)] dark:shadow-none hover:shadow-[0_4px_16px_rgb(0,0,0,0.06)] hover:border-gray-200 dark:hover:border-gray-700/80'
-        }
+        p-4 rounded-2xl bg-white dark:bg-white/[0.035] border border-gray-100/80 dark:border-gray-800/50 shadow-[0_1px_3px_rgb(0,0,0,0.02)] dark:shadow-none hover:shadow-[0_4px_16px_rgb(0,0,0,0.06)] hover:border-gray-200 dark:hover:border-gray-700/80
       `}
     >
       <div className="flex items-start gap-3.5">
-        {/* Company Avatar with gradient */}
+        {/* Source Avatar with gradient */}
         <div
-          className={`shrink-0 ${isCompact ? 'w-10 h-10 rounded-xl' : 'w-11 h-11 rounded-[13px]'} bg-gradient-to-br ${gradient} flex items-center justify-center shadow-sm`}
+          className={`shrink-0 w-11 h-11 rounded-[13px] bg-gradient-to-br ${gradient} flex items-center justify-center shadow-sm`}
         >
-          <span className={`font-bold text-white ${isCompact ? 'text-[13px]' : 'text-[14px]'} drop-shadow-sm`}>
-            {company.symbol.substring(0, 2)}
+          <span className="font-bold text-white text-[14px] drop-shadow-sm">
+            {article.source.substring(0, 2).toUpperCase()}
           </span>
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0 pt-0.5">
-          {/* Metadata: Ticker · Source · Time */}
+          {/* Source name + Time */}
           <div className="flex items-center justify-between gap-2 mb-1.5">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="font-extrabold text-[12px] tracking-wide text-gray-900 dark:text-gray-100 uppercase truncate">
-                {company.symbol}
-              </span>
-              <span className="w-[3px] h-[3px] rounded-full bg-gray-300 dark:bg-gray-600 shrink-0" />
-              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium truncate">
-                {article.source}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0 pl-2">
+            <span className="font-extrabold text-[12px] tracking-wide text-gray-900 dark:text-gray-100">
+              {article.source}
+            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {isRecent && (
+                <span className="flex items-center gap-0.5 text-[10px] font-bold text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded-full">
+                  <Zap size={8} className="fill-current" />
+                  NEW
+                </span>
+              )}
               <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium tabular-nums">
                 {timeAgo}
               </span>
@@ -146,7 +138,7 @@ const NewsCard = memo(function NewsCard({ article, company, isCompact, isBookmar
             className={`
               font-semibold leading-[1.45] text-gray-800 dark:text-gray-200 
               group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors
-              ${isCompact ? 'text-[13px] line-clamp-2' : 'text-[14px] sm:text-[15px] line-clamp-3'}
+              text-[14px] sm:text-[15px] line-clamp-3
             `}
           >
             {article.title}
@@ -154,18 +146,9 @@ const NewsCard = memo(function NewsCard({ article, company, isCompact, isBookmar
 
           {/* Read indicator & Badges */}
           <div className="flex items-center justify-between mt-2.5">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 text-[10px] text-gray-300 dark:text-gray-600 group-hover:text-blue-400 dark:group-hover:text-blue-500 transition-colors">
-                <Newspaper size={10} />
-                <span className="font-medium mr-1">Read</span>
-              </div>
-              
-              {/* Sparkline explicitly pushed into the layout */}
-              {!isCompact && sparklineData && sparklineData.length > 0 && (
-                <div className="hidden sm:block pointer-events-none mt-0.5">
-                  <Sparkline data={sparklineData} isPositive={isPositive} width={45} height={16} />
-                </div>
-              )}
+            <div className="flex items-center gap-1 text-[10px] text-gray-300 dark:text-gray-600 group-hover:text-blue-400 dark:group-hover:text-blue-500 transition-colors">
+              <Newspaper size={10} />
+              <span className="font-medium">Read</span>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               {article.sentiment === 'bullish' && (
@@ -176,12 +159,6 @@ const NewsCard = memo(function NewsCard({ article, company, isCompact, isBookmar
               {article.sentiment === 'bearish' && (
                 <span className="font-bold text-[9px] uppercase tracking-wider text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/40 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-800">
                   Bearish
-                </span>
-              )}
-              {isRecent && (
-                <span className="flex items-center gap-0.5 text-[10px] font-bold text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded-full">
-                  <Zap size={8} className="fill-current" />
-                  NEW
                 </span>
               )}
               {onToggleBookmark && (
@@ -204,45 +181,6 @@ const NewsCard = memo(function NewsCard({ article, company, isCompact, isBookmar
   );
 });
 
-// ─── Section Header ─────────────────────────────────────────
-
-function SectionHeader({
-  icon: Icon,
-  title,
-  subtitle,
-  accentColor,
-  count,
-}: {
-  icon: React.ComponentType<{ size: number; className?: string }>;
-  title: string;
-  subtitle: string;
-  accentColor: string;
-  count?: number;
-}) {
-  return (
-    <div className="flex items-center gap-3 mb-3 px-1">
-      <div className={`p-2 rounded-xl ${accentColor}`}>
-        <Icon size={16} className="text-white" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2">
-          <h2 className="text-[15px] font-bold text-gray-900 dark:text-gray-100 tracking-tight">
-            {title}
-          </h2>
-          {count !== undefined && count > 0 && (
-            <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 tabular-nums">
-              {count}
-            </span>
-          )}
-        </div>
-        <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mt-0.5">
-          {subtitle}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main Component ─────────────────────────────────────────
 
 interface RecentNewsFeedProps {
@@ -255,24 +193,16 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
   const [viewMode, setViewMode] = useState<'feed' | 'saved'>('feed');
   const { bookmarks, toggleBookmark, isBookmarked } = useBookmarks();
 
-  const { priorityNews, otherNews, isLoading, refetch } = useRecentNews(
+  const { allNews, isLoading, refetch } = useRecentNews(
     allCompanies,
     watchlistIds,
     visitedCounts,
   );
   
-  const { briefing, isLoading: isBriefingLoading } = useBriefing(priorityNews);
+  const { briefing, isLoading: isBriefingLoading } = useBriefing(allNews);
 
-  const hasPriorityData = priorityNews.length > 0;
-  const hasOtherData = otherNews.length > 0;
-  const isEmpty = !isLoading && !hasPriorityData && !hasOtherData;
-
-  // Memoize priority subtitle
-  const prioritySubtitle = useMemo(() => {
-    const visitCount = Object.keys(visitedCounts).length;
-    if (visitCount > 0) return `From ${visitCount} recently viewed companies`;
-    return 'Browse companies to populate your recent feed';
-  }, [Object.keys(visitedCounts).length]);
+  const hasData = allNews.length > 0;
+  const isEmpty = !isLoading && !hasData;
 
   return (
     <div className="flex-1 w-full relative min-h-0 h-full">
@@ -281,7 +211,7 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         <div className="flex flex-col min-h-full">
-          {/* ─── Pull-to-refresh header ─── */}
+          {/* ─── Header ─── */}
       <div className="flex flex-col px-4 pt-2 pb-3 mb-1 shrink-0 gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -364,7 +294,7 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
       ) : (
         <>
       {/* ─── AI Morning Briefing ─── */}
-      {!isLoading && priorityNews.length > 0 && (
+      {!isLoading && allNews.length > 0 && (
         <div className="px-3 sm:px-4 mb-6">
           <div className="relative overflow-hidden rounded-2xl p-[1px] bg-gradient-to-br from-indigo-500/30 via-purple-500/30 to-blue-500/30 shadow-sm">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-purple-500/10" />
@@ -394,39 +324,12 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
         </div>
       )}
 
-      {/* ─── Loading State ─── */}
-      {isLoading && priorityNews.length === 0 && otherNews.length === 0 && (
-        <div className="space-y-6 px-3 sm:px-4">
-          {/* Priority skeleton */}
-          <div>
-            <div className="flex items-center gap-3 mb-3 px-1">
-              <div className="w-9 h-9 rounded-xl skeleton-shimmer" />
-              <div className="space-y-1.5">
-                <div className="h-3.5 w-28 rounded-full skeleton-shimmer" />
-                <div className="h-2.5 w-44 rounded-full skeleton-shimmer" />
-              </div>
-            </div>
-            <div className="space-y-2.5">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <SkeletonCard key={`p-${i}`} />
-              ))}
-            </div>
-          </div>
-          {/* Other skeleton */}
-          <div>
-            <div className="flex items-center gap-3 mb-3 px-1">
-              <div className="w-9 h-9 rounded-xl skeleton-shimmer" />
-              <div className="space-y-1.5">
-                <div className="h-3.5 w-24 rounded-full skeleton-shimmer" />
-                <div className="h-2.5 w-36 rounded-full skeleton-shimmer" />
-              </div>
-            </div>
-            <div className="space-y-2.5">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <SkeletonCard key={`o-${i}`} />
-              ))}
-            </div>
-          </div>
+      {/* ─── Loading State (only when no cached data) ─── */}
+      {isLoading && allNews.length === 0 && (
+        <div className="space-y-2.5 px-3 sm:px-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={`sk-${i}`} />
+          ))}
         </div>
       )}
 
@@ -445,55 +348,33 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
         </div>
       )}
 
-      {/* ─── Priority News Section ─── */}
-      {hasPriorityData && (
-        <section className="px-3 sm:px-4 mb-6">
-          <SectionHeader
-            icon={Flame}
-            title="Your Priority Feed"
-            subtitle={prioritySubtitle}
-            accentColor="bg-gradient-to-br from-orange-500 to-rose-500"
-            count={priorityNews.length}
-          />
-          <div className="space-y-2.5">
-            {priorityNews.map((item) => (
-              <NewsCard
-                key={`p-${item.article.id || item.article.url}-${item.company.id}`}
-                article={item.article}
-                company={item.company}
-                isBookmarked={isBookmarked(item.article.url)}
-                onToggleBookmark={(e) => {
-                  e.stopPropagation();
-                  toggleBookmark(item);
-                }}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ─── Divider between sections ─── */}
-      {hasPriorityData && hasOtherData && (
-        <div className="mx-6 mb-5 border-t border-gray-100 dark:border-gray-800/60" />
-      )}
-
-      {/* ─── Other Companies News ─── */}
-      {hasOtherData && (
+      {/* ─── Chronological News Feed ─── */}
+      {hasData && (
         <section className="px-3 sm:px-4 mb-4">
-          <SectionHeader
-            icon={Globe}
-            title="Market Headlines"
-            subtitle="Latest from popular companies"
-            accentColor="bg-gradient-to-br from-blue-500 to-cyan-500"
-            count={otherNews.length}
-          />
-          <div className="space-y-2">
-            {otherNews.map((item) => (
+          <div className="flex items-center gap-3 mb-3 px-1">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500">
+              <Globe size={16} className="text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-[15px] font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+                  Latest Headlines
+                </h2>
+                <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 tabular-nums">
+                  {allNews.length}
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mt-0.5">
+                Indian share market · newest first
+              </p>
+            </div>
+          </div>
+          <div className="space-y-2.5">
+            {allNews.map((item) => (
               <NewsCard
-                key={`o-${item.article.id || item.article.url}-${item.company.id}`}
+                key={`n-${item.article.id || item.article.url}-${item.company.id}`}
                 article={item.article}
                 company={item.company}
-                isCompact
                 isBookmarked={isBookmarked(item.article.url)}
                 onToggleBookmark={(e) => {
                   e.stopPropagation();

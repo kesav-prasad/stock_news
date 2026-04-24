@@ -1,26 +1,22 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import {
-  getCachedNews,
-  setCachedNews,
-  isNewsCacheStale,
-  resilientFetch,
-  isOnline,
-} from '@/lib/offlineCache';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { resilientFetch, isOnline } from '@/lib/offlineCache';
 
-interface NewsArticle {
+const MARKET_NEWS_CACHE_KEY = 'sn_market_news_feed';
+const CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+
+interface MarketNewsArticle {
   id: string;
   title: string;
   url: string;
   source: string;
   publishedAt: string;
-  summary?: string;
   sentiment?: 'bullish' | 'bearish' | 'neutral';
 }
 
 interface AggregatedNewsItem {
-  article: NewsArticle;
+  article: MarketNewsArticle;
   company: {
     id: string;
     name: string;
@@ -28,214 +24,148 @@ interface AggregatedNewsItem {
   };
 }
 
-// Default pool of popular companies to always show news from
-// Uses base ticker prefixes — matched with startsWith to handle .NS/.BO suffixes
-const DEFAULT_POOL_PREFIXES = [
-  'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-  'HINDUNILVR', 'ITC', 'SBIN', 'BHARTIARTL', 'KOTAKBANK',
-  'WIPRO', 'TATAMOTORS', 'MARUTI', 'ADANIENT', 'BAJFINANCE',
-];
+/**
+ * Read cached market news from localStorage for instant render.
+ */
+function getCachedMarketNews(): AggregatedNewsItem[] | null {
+  try {
+    const raw = localStorage.getItem(MARKET_NEWS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.data || !Array.isArray(parsed.data)) return null;
+    // Return cached data if within TTL
+    if (Date.now() - parsed.timestamp < CACHE_TTL * 10) {
+      return parsed.data;
+    }
+    return parsed.data; // Still return even if stale (for instant render)
+  } catch {
+    return null;
+  }
+}
 
-/** Check if a symbol matches any of the default pool prefixes */
-function isDefaultPoolSymbol(symbol: string): boolean {
-  const upper = symbol.toUpperCase();
-  return DEFAULT_POOL_PREFIXES.some((prefix) => upper === prefix || upper.startsWith(prefix + '.'));
+function setCachedMarketNews(data: AggregatedNewsItem[]) {
+  try {
+    localStorage.setItem(MARKET_NEWS_CACHE_KEY, JSON.stringify({
+      data,
+      timestamp: Date.now(),
+    }));
+  } catch {}
 }
 
 /**
- * ★ Aggregated Recent News hook.
+ * ★ Market News Feed hook.
  *
- * Fetches news for MULTIPLE companies concurrently, then splits them into:
- *   - priorityNews: from user's watchlist + frequently visited companies
- *   - otherNews: from a default pool of popular companies
- *
- * Both arrays are sorted by publishedAt (newest first).
+ * Fetches ALL Indian stock market news from a single /api/market-news endpoint.
+ * Returns a flat chronological list (newest first), fully deduplicated.
+ * Cache-first for instant rendering. Auto-refreshes every 3 minutes.
  */
 export function useRecentNews(
-  allCompanies: { id: string; name: string; symbol: string }[],
-  watchlistIds: Set<string>,
-  visitedCounts: Record<string, number>,
+  _allCompanies: { id: string; name: string; symbol: string }[],
+  _watchlistIds: Set<string>,
+  _visitedCounts: Record<string, number>,
 ) {
-  const [priorityNews, setPriorityNews] = useState<AggregatedNewsItem[]>([]);
-  const [otherNews, setOtherNews] = useState<AggregatedNewsItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [fetchKey, setFetchKey] = useState(0); // Incremented to force re-fetch
+  const [allNews, setAllNews] = useState<AggregatedNewsItem[]>(() => {
+    // Synchronous cache read for instant render — no loading flash
+    if (typeof window !== 'undefined') {
+      const cached = getCachedMarketNews();
+      if (cached && cached.length > 0) return cached;
+    }
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState(() => {
+    // If we have cached data, don't show loading
+    if (typeof window !== 'undefined') {
+      const cached = getCachedMarketNews();
+      if (cached && cached.length > 0) return false;
+    }
+    return true;
+  });
+  const [fetchKey, setFetchKey] = useState(0);
   const abortRef = useRef(false);
 
-  // Build the list of priority company IDs (watchlist + visited, deduplicated)
-  const priorityCompanyIds = useMemo(() => {
-    const ids = new Set<string>();
-    // Watchlist first
-    watchlistIds.forEach((id) => ids.add(id));
-    // Then frequently visited, sorted by visit count
-    const sortedVisited = Object.entries(visitedCounts)
-      .sort(([, a], [, b]) => b - a)
-      .map(([id]) => id);
-    sortedVisited.forEach((id) => ids.add(id));
-    return Array.from(ids);
-  }, [watchlistIds, visitedCounts]);
+  const fetchMarketNews = useCallback(async (isForced = false) => {
+    if (!isOnline() && !isForced) return;
 
-  // Build the list of "other" company IDs (popular companies not in priority)
-  const otherCompanyIds = useMemo(() => {
-    const prioritySet = new Set(priorityCompanyIds);
-    return allCompanies
-      .filter((c) => isDefaultPoolSymbol(c.symbol) && !prioritySet.has(c.id))
-      .map((c) => c.id)
-      .slice(0, 10); // Show news from up to 10 popular companies
-  }, [allCompanies, priorityCompanyIds]);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://stocknews-backend.onrender.com';
+      const res = await resilientFetch(`${baseUrl}/api/market-news`, {
+        timeoutMs: isForced ? 15000 : 10000,
+        retries: isForced ? 1 : 0,
+        retryDelayMs: 1000,
+      });
+      const articles: MarketNewsArticle[] = await res.json();
 
-  // Map for quick company lookup
-  const companyMap = useMemo(() => {
-    const map = new Map<string, { id: string; name: string; symbol: string }>();
-    allCompanies.forEach((c) => map.set(c.id, c));
-    return map;
-  }, [allCompanies]);
+      if (!Array.isArray(articles) || articles.length === 0) return;
 
-  const fetchNewsForCompany = useCallback(
-    async (companyId: string, forceFetch = false): Promise<NewsArticle[]> => {
-      // 1. Try cache first
-      const cached = getCachedNews(companyId);
-      
-      // If we have cache and we aren't forcing a hard refresh, return it instantly
-      if (!forceFetch && cached && cached.length > 0) {
-        // If it's stale, fetch in the background silently
-        if (isOnline() && isNewsCacheStale(companyId)) {
-          const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://stocknews-backend.onrender.com';
-          resilientFetch(`${baseUrl}/api/companies/${companyId}/news`, {
-            timeoutMs: 10000,
-            retries: 0,
-          }).then(res => res.json()).then(fresh => {
-            if (Array.isArray(fresh) && fresh.length > 0) setCachedNews(companyId, fresh);
-          }).catch(() => {}); // silent fail in background
-        }
-        return cached;
-      }
+      // Transform into AggregatedNewsItem format
+      // Since these are market-wide news (not company-specific), use source as the "company"
+      const items: AggregatedNewsItem[] = articles.map(article => ({
+        article,
+        company: {
+          id: article.source,
+          name: article.source,
+          symbol: article.source.substring(0, 4).toUpperCase(),
+        },
+      }));
 
-      // 2. Network fetch required
-      if (!isOnline()) {
-        return cached || [];
-      }
-
-      try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://stocknews-backend.onrender.com';
-        const res = await resilientFetch(`${baseUrl}/api/companies/${companyId}/news`, {
-          timeoutMs: forceFetch ? 15000 : 8000, // Shorter timeout for initial loads
-          retries: forceFetch ? 1 : 0,
-          retryDelayMs: 1000,
-        });
-        const freshNews = await res.json();
-        if (Array.isArray(freshNews) && freshNews.length > 0) {
-          setCachedNews(companyId, freshNews);
-          return freshNews;
-        }
-      } catch {
-        // Fallback to cached
-      }
-
-      return cached || [];
-    },
-    [],
-  );
+      setAllNews(items);
+      setCachedMarketNews(items);
+    } catch (err) {
+      console.error('[useRecentNews] Failed to fetch market news:', err);
+    }
+  }, []);
 
   useEffect(() => {
-    if (allCompanies.length === 0) return;
     abortRef.current = false;
 
-    async function fetchAll() {
-      setIsLoading(true);
-
+    async function run() {
       const isForced = fetchKey > 0;
-      const priorityIds = priorityCompanyIds.slice(0, 5); // Reduced from 15 to 5 for speed
-      
-      // Clear current state if forced refresh
+
       if (isForced) {
-        setPriorityNews([]);
-        setOtherNews([]);
+        setAllNews([]);
+        setIsLoading(true);
       }
 
-      const processCompany = async (id: string, isPriority: boolean, limit: number) => {
-        const company = companyMap.get(id);
-        if (!company) return;
+      // If we already have cached data (from initial state), just background-refresh
+      const hasCachedData = allNews.length > 0 && !isForced;
 
-        // Synchronously check cache for instant render
-        const cached = getCachedNews(id);
-        const hasCache = !isForced && cached && cached.length > 0;
-        
-        if (hasCache) {
-          const items = cached.slice(0, limit).map((a) => ({
-            article: a,
-            company: { id: company.id, name: company.name, symbol: company.symbol },
-          }));
-          
-          if (isPriority) {
-            setPriorityNews(prev => {
-              const combined = [...prev, ...items];
-              const unique = Array.from(new Map(combined.map(item => [item.article.id || item.article.url, item])).values());
-              return unique.sort((a, b) => new Date(b.article.publishedAt).getTime() - new Date(a.article.publishedAt).getTime());
-            });
-          } else {
-            setOtherNews(prev => {
-              const combined = [...prev, ...items];
-              const unique = Array.from(new Map(combined.map(item => [item.article.id || item.article.url, item])).values());
-              return unique.sort((a, b) => new Date(b.article.publishedAt).getTime() - new Date(a.article.publishedAt).getTime());
-            });
-          }
-        }
+      if (!hasCachedData) {
+        setIsLoading(true);
+      }
 
-        // Await the fetch results
-        const articles = await fetchNewsForCompany(id, isForced);
-        if (abortRef.current || !articles || articles.length === 0) return;
-
-        // If we didn't add from cache, or if we did a forced refresh, append network results
-        if (!hasCache || isForced) {
-          const items = articles.slice(0, limit).map((a) => ({
-            article: a,
-            company: { id: company.id, name: company.name, symbol: company.symbol },
-          }));
-
-          if (isPriority) {
-            setPriorityNews(prev => {
-              const combined = [...prev, ...items];
-              const unique = Array.from(new Map(combined.map(item => [item.article.id || item.article.url, item])).values());
-              return unique.sort((a, b) => new Date(b.article.publishedAt).getTime() - new Date(a.article.publishedAt).getTime());
-            });
-          } else {
-            setOtherNews(prev => {
-              const combined = [...prev, ...items];
-              const unique = Array.from(new Map(combined.map(item => [item.article.id || item.article.url, item])).values());
-              return unique.sort((a, b) => new Date(b.article.publishedAt).getTime() - new Date(a.article.publishedAt).getTime());
-            });
-          }
-        }
-      };
-
-      // Set up promises without blocking each other
-      const priorityPromises = priorityIds.map(id => processCompany(id, true, 3));
-      const otherPromises = otherCompanyIds.map(id => processCompany(id, false, 2));
-
-      // Wait for all to finish just to remove the loading state
-      await Promise.all([...priorityPromises, ...otherPromises]);
+      await fetchMarketNews(isForced);
 
       if (!abortRef.current) {
         setIsLoading(false);
       }
     }
 
-    fetchAll();
+    run();
+
+    // ★ Auto-refresh every 3 minutes for fresh news
+    const refreshInterval = setInterval(() => {
+      if (!abortRef.current) {
+        fetchMarketNews(false).catch(() => {});
+      }
+    }, CACHE_TTL);
 
     return () => {
       abortRef.current = true;
+      clearInterval(refreshInterval);
     };
-    // fetchKey in deps ensures refetch() actually re-triggers the effect
-  }, [allCompanies.length, priorityCompanyIds, otherCompanyIds, companyMap, fetchNewsForCompany, fetchKey]);
+  }, [fetchKey, fetchMarketNews]);
 
-  // Allow manual refetch — increment fetchKey to force useEffect re-run
   const refetch = useCallback(() => {
-    setPriorityNews([]);
-    setOtherNews([]);
+    setAllNews([]);
     setIsLoading(true);
     setFetchKey((k) => k + 1);
   }, []);
 
-  return { priorityNews, otherNews, isLoading, refetch };
+  return {
+    priorityNews: allNews,
+    otherNews: [] as AggregatedNewsItem[],
+    allNews,
+    isLoading,
+    refetch,
+  };
 }

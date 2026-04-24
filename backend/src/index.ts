@@ -2,6 +2,7 @@ import express from 'express';
 import http from 'http';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import Parser from 'rss-parser';
 import { PrismaClient } from '@prisma/client';
 import { fetchNewsForCompany } from './services/aiNewsService';
 import { fetchStockQuote, fetchHistoricalData } from './services/marketDataService';
@@ -205,6 +206,140 @@ app.get('/api/companies/:id/historical', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch historical data' });
+  }
+});
+
+// ==========================================
+// ★ MARKET NEWS FEED — Single endpoint for ALL Indian stock market news
+// ==========================================
+
+const rssParser = new Parser();
+
+// In-memory cache for market news (avoids hitting Google News RSS too frequently)
+let marketNewsCache: { data: any[]; expires: number } = { data: [], expires: 0 };
+const MARKET_NEWS_TTL = 3 * 60 * 1000; // 3 minutes
+
+/**
+ * Simple text similarity using Jaccard index on word sets.
+ */
+function titleSimilarity(a: string, b: string): number {
+  const normalize = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
+  const setA = new Set(normalize(a));
+  const setB = new Set(normalize(b));
+  const intersection = new Set([...setA].filter(x => setB.has(x)));
+  const union = new Set([...setA, ...setB]);
+  if (union.size === 0) return 0;
+  return intersection.size / union.size;
+}
+
+app.get('/api/market-news', async (_req, res) => {
+  try {
+    // Return cached data if still fresh
+    if (Date.now() < marketNewsCache.expires && marketNewsCache.data.length > 0) {
+      console.log(`[MarketNews] Serving ${marketNewsCache.data.length} cached articles`);
+      res.json(marketNewsCache.data);
+      return;
+    }
+
+    console.log('[MarketNews] Fetching fresh news from Google News RSS...');
+
+    // Broad queries covering all Indian stock market news
+    const queries = [
+      'Indian stock market today when:1d',
+      'BSE NSE share market news India when:1d',
+      'Nifty Sensex today when:1d',
+      'India share market stocks when:1d',
+      'stock market India news when:1d',
+      'Indian equity market today when:1d',
+    ];
+
+    // Fetch all queries in parallel
+    const results = await Promise.all(
+      queries.map(q =>
+        rssParser.parseURL(
+          `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-IN&gl=IN&ceid=IN:en`
+        ).catch(err => {
+          console.error(`[MarketNews] Query failed: "${q}" —`, err.message);
+          return { items: [] };
+        })
+      )
+    );
+
+    // Merge all items from all queries
+    const allItems: any[] = [];
+    for (const feed of results) {
+      if (feed.items) allItems.push(...feed.items);
+    }
+
+    console.log(`[MarketNews] Raw items from ${queries.length} queries: ${allItems.length}`);
+
+    // Deduplicate by URL first
+    const seenUrls = new Set<string>();
+    const urlDeduped: any[] = [];
+    for (const item of allItems) {
+      if (!item.title || !item.link) continue;
+      if (seenUrls.has(item.link)) continue;
+      seenUrls.add(item.link);
+      urlDeduped.push(item);
+    }
+
+    // Deduplicate by title similarity (Jaccard > 0.65 = duplicate)
+    const dedupedItems: any[] = [];
+    for (const item of urlDeduped) {
+      const isDuplicate = dedupedItems.some(
+        existing => titleSimilarity(existing.title, item.title) > 0.65
+      );
+      if (!isDuplicate) dedupedItems.push(item);
+    }
+
+    // Parse into structured articles
+    const bullishWords = /\b(surge|jump|soar|buy|upgrade|record|profit|gain|growth|rally|soars|up|higher|revenue|win|bull|expansion|beat|outperform|rise|rises|bullish|positive|upbeat|boom)\b/i;
+    const bearishWords = /\b(plunge|drop|fall|sell|downgrade|loss|decline|miss|down|lower|lawsuit|bear|shrink|underperform|crash|weakness|probe|investigate|fraud|scam|fine|tank|slump|tumble|bearish|negative)\b/i;
+
+    const articles = dedupedItems.map(item => {
+      let source = 'Google News';
+      const dashIdx = item.title.lastIndexOf(' - ');
+      let title = item.title;
+      if (dashIdx !== -1) {
+        source = item.title.substring(dashIdx + 3).trim();
+        title = item.title.substring(0, dashIdx).trim();
+      }
+
+      const titleLower = title.toLowerCase();
+      let sentiment = 'neutral';
+      if (bearishWords.test(titleLower) && !bullishWords.test(titleLower)) sentiment = 'bearish';
+      else if (bullishWords.test(titleLower) && !bearishWords.test(titleLower)) sentiment = 'bullish';
+
+      return {
+        id: item.link,
+        title,
+        url: item.link,
+        source,
+        publishedAt: item.isoDate || new Date().toISOString(),
+        sentiment,
+      };
+    });
+
+    // Sort by publishedAt descending (newest first)
+    articles.sort((a, b) =>
+      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+    );
+
+    console.log(`[MarketNews] Final: ${articles.length} unique articles after dedup`);
+
+    // Cache the results
+    marketNewsCache = { data: articles, expires: Date.now() + MARKET_NEWS_TTL };
+
+    res.json(articles);
+  } catch (err) {
+    console.error('[MarketNews] Error:', err);
+    // Return cached data even if expired, as fallback
+    if (marketNewsCache.data.length > 0) {
+      res.json(marketNewsCache.data);
+    } else {
+      res.status(500).json({ error: 'Failed to fetch market news' });
+    }
   }
 });
 
