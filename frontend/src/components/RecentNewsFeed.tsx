@@ -255,11 +255,9 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
   const [viewMode, setViewMode] = useState<'feed' | 'saved'>('feed');
   const { bookmarks, toggleBookmark, isBookmarked } = useBookmarks();
 
-  const emptyWatchlists = useMemo(() => new Set<string>(), []);
-  
   const { priorityNews, otherNews, isLoading, refetch } = useRecentNews(
     allCompanies,
-    emptyWatchlists, // Explicitly ignore watchlists for priority grouping
+    watchlistIds,
     visitedCounts,
   );
   

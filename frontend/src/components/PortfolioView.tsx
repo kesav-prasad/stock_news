@@ -123,7 +123,7 @@ export default function PortfolioView() {
   // --- CONNECT FORM ---
   if (!isConfigured) {
     return (
-      <div className="flex-1 flex items-center justify-center px-4 py-8">
+      <div className="flex-1 flex items-center justify-center px-4 py-8" style={{ fontFamily: 'var(--font-outfit), sans-serif' }}>
         <div className="w-full max-w-md space-y-6">
           {/* Header */}
           <div className="text-center space-y-3">
@@ -224,7 +224,7 @@ export default function PortfolioView() {
 
   // --- PORTFOLIO VIEW ---
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden" style={{ fontFamily: 'var(--font-outfit), sans-serif' }}>
       {/* Header bar */}
       <div className="flex items-center justify-between px-4 py-3 sm:px-6">
         <div>

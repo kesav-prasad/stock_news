@@ -81,7 +81,7 @@ export function useRecentNews(
     return allCompanies
       .filter((c) => isDefaultPoolSymbol(c.symbol) && !prioritySet.has(c.id))
       .map((c) => c.id)
-      .slice(0, 5); // Reduced cap to 5 to massively improve load speeds
+      .slice(0, 10); // Show news from up to 10 popular companies
   }, [allCompanies, priorityCompanyIds]);
 
   // Map for quick company lookup
