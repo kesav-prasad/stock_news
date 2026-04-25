@@ -6,10 +6,12 @@ import StockGrid from '@/components/StockGrid';
 import CompanyModal from '@/components/CompanyModal';
 import RecentNewsFeed from '@/components/RecentNewsFeed';
 import PortfolioView from '@/components/PortfolioView';
+import UpdatePopup from '@/components/UpdatePopup';
 import { useWatchlist } from '@/hooks/useWatchlist';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useNewsNotifications } from '@/hooks/useNewsNotifications';
 import { useRecentCompanies } from '@/hooks/useRecentCompanies';
+import { useBackButton } from '@/hooks/useBackButton';
 import { useTheme } from 'next-themes';
 import { isOnline } from '@/lib/offlineCache';
 
@@ -98,9 +100,14 @@ export default function DashboardPage() {
   }, []);
 
   // ★ Navbar tabs should update instantly for immediate visual feedback
-  const handleTabChange = useCallback((tab: ViewTab) => {
-    setActiveTab(tab);
+  const handleTabChange = useCallback((tab: string) => {
+    setActiveTab(tab as ViewTab);
   }, []);
+
+  const handleSelectCompany = useCallback((c: Company) => {
+    setSelectedCompany(c);
+  }, []);
+  const handleCloseModal = useCallback(() => setSelectedCompany(null), []);
 
   const handleExchangeChange = useCallback((value: string) => {
     startTransition(() => {
@@ -121,18 +128,18 @@ export default function DashboardPage() {
 
   // Initialize push notifications
   useNewsNotifications((companyId: string) => {
-    // We defer finding the company inside the callback. Note that `allCompanies` is updated globally.
-    // If the notification returns, find the company in our list or create a base dummy if not loaded yet.
     startTransition(() => {
       const targetCompany = allCompanies.find(c => c.id === companyId);
       if (targetCompany) {
         setSelectedCompany(targetCompany);
       } else {
-        // Fallback stub if it hasn't finished loading all companies yet
         setSelectedCompany({ id: companyId, name: 'Loading...', symbol: '', exchange: '' });
       }
     });
   });
+
+  // ★ Android hardware back button handler
+  useBackButton(selectedCompany, handleCloseModal, activeTab, handleTabChange);
 
 
   // ★ OFFLINE-FIRST: Companies load with brief animation
@@ -177,11 +184,10 @@ export default function DashboardPage() {
     return `${displayedCompanies.length} of ${total}`;
   }, [deferredTab, displayedCompanies.length, total]);
 
-  const handleSelectCompany = useCallback((c: Company) => {
+  const handleSelectCompanyWithVisit = useCallback((c: Company) => {
     recordVisit(c.id);
-    setSelectedCompany(c);
-  }, [recordVisit]);
-  const handleCloseModal = useCallback(() => setSelectedCompany(null), []);
+    handleSelectCompany(c);
+  }, [recordVisit, handleSelectCompany]);
 
   return (
     <div className="min-h-screen min-h-[100dvh] flex flex-col bg-gray-50 dark:bg-gray-950">
@@ -344,7 +350,7 @@ export default function DashboardPage() {
           ) : (
             <StockGrid
               companies={displayedCompanies}
-              onSelectCompany={handleSelectCompany}
+              onSelectCompany={handleSelectCompanyWithVisit}
               isInWatchlist={isInWatchlist}
               onToggleWatchlist={toggleWatchlist}
             />
@@ -415,6 +421,9 @@ export default function DashboardPage() {
         isWatchlisted={selectedCompany ? isInWatchlist(selectedCompany.id) : false}
         onToggleWatchlist={toggleWatchlist}
       />
+
+      {/* ★ Update Popup — shows "What's New" on version change */}
+      <UpdatePopup />
     </div>
   );
 }

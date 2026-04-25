@@ -39,7 +39,7 @@ export default function PortfolioView() {
   const [showSecrets, setShowSecrets] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Load saved credentials from localStorage
+  // Load saved credentials + cached holdings from localStorage
   useEffect(() => {
     try {
       const stored = localStorage.getItem(BROKER_STORAGE_KEY);
@@ -47,6 +47,20 @@ export default function PortfolioView() {
         const parsed = JSON.parse(stored);
         setCredentials(parsed);
         setIsConfigured(true);
+
+        // ★ Show cached holdings instantly while fetching fresh data
+        const cachedHoldings = localStorage.getItem('sn_portfolio_cache');
+        if (cachedHoldings) {
+          try {
+            const cached = JSON.parse(cachedHoldings);
+            if (Array.isArray(cached) && cached.length > 0) {
+              setHoldings(cached);
+              setLoading(false); // ★ No spinner — show cached data immediately
+            }
+          } catch {}
+        }
+
+        // Fetch fresh data in background
         fetchHoldings(parsed);
       } else {
         setLoading(false);
@@ -57,28 +71,43 @@ export default function PortfolioView() {
   }, []);
 
   const fetchHoldings = useCallback(async (creds: Credentials) => {
-    setLoading(true);
+    // Only show loading spinner if we have NO cached data
+    setLoading(prev => holdings.length === 0 ? true : prev);
     setError(null);
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
       const res = await fetch(`${API_BASE}/api/broker/holdings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(creds),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeout);
       const data = await res.json();
 
       if (data.success && data.holdings) {
         setHoldings(data.holdings);
+        // ★ Cache holdings for instant load next time
+        try {
+          localStorage.setItem('sn_portfolio_cache', JSON.stringify(data.holdings));
+        } catch {}
       } else {
         setError(data.message || data.error || 'Failed to fetch holdings');
       }
     } catch (err: any) {
-      setError(err.message || 'Network error connecting to broker');
+      if (err.name === 'AbortError') {
+        setError('Connection timed out. Tap Retry.');
+      } else {
+        setError(err.message || 'Network error connecting to broker');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [holdings.length]);
 
   const handleConnect = useCallback(async () => {
     if (!credentials.apiKey || !credentials.clientId || !credentials.pin || !credentials.totpSecret) {

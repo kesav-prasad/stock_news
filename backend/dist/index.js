@@ -255,13 +255,17 @@ app.get('/api/market-news', async (_req, res) => {
         }
         console.log('[MarketNews] Fetching fresh news from Google News RSS...');
         // Broad queries covering all Indian stock market news
+        // NOTE: Removed `when:1d` — it's too restrictive and causes Google News
+        // to return zero results. The RSS feed already returns recent articles by default.
         const queries = [
-            'Indian stock market today when:1d',
-            'BSE NSE share market news India when:1d',
-            'Nifty Sensex today when:1d',
-            'India share market stocks when:1d',
-            'stock market India news when:1d',
-            'Indian equity market today when:1d',
+            'Indian stock market news',
+            'BSE NSE Nifty Sensex share market',
+            'share market India today',
+            'stock market India latest',
+            'Nifty 50 stocks today India',
+            'India finance market news',
+            'Reliance TCS HDFC Infosys stock',
+            'Indian share price today',
         ];
         // Fetch all queries in parallel
         const results = await Promise.all(queries.map(q => rssParser.parseURL(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-IN&gl=IN&ceid=IN:en`).catch(err => {
