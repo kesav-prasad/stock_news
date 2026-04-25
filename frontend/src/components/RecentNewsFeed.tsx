@@ -370,7 +370,7 @@ export default function RecentNewsFeed({ allCompanies, watchlistIds, visitedCoun
             </div>
           </div>
           <div className="space-y-2.5">
-            {allNews.map((item) => (
+            {allNews.slice(0, 50).map((item) => (
               <NewsCard
                 key={`n-${item.article.id || item.article.url}-${item.company.id}`}
                 article={item.article}

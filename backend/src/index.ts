@@ -217,7 +217,7 @@ const rssParser = new Parser();
 
 // In-memory cache for market news (avoids hitting Google News RSS too frequently)
 let marketNewsCache: { data: any[]; expires: number } = { data: [], expires: 0 };
-const MARKET_NEWS_TTL = 3 * 60 * 1000; // 3 minutes
+const MARKET_NEWS_TTL = 1 * 60 * 1000; // 1 minute
 
 /**
  * Simple text similarity using Jaccard index on word sets.
@@ -244,31 +244,36 @@ app.get('/api/market-news', async (_req, res) => {
 
     console.log('[MarketNews] Fetching fresh news from Google News RSS...');
 
-    // Broad queries covering all Indian stock market news
-    // NOTE: Removed `when:1d` — it's too restrictive and causes Google News
-    // to return zero results. The RSS feed already returns recent articles by default.
     const queries = [
-      'Indian stock market news',
-      'BSE NSE Nifty Sensex share market',
-      'share market India today',
-      'stock market India latest',
-      'Nifty 50 stocks today India',
-      'India finance market news',
-      'Reliance TCS HDFC Infosys stock',
-      'Indian share price today',
+      'site:livemint.com "stock market" when:3d',
+      'site:moneycontrol.com "stock market" when:3d',
+      'site:economictimes.indiatimes.com "stock market" when:3d',
+      'site:news18.com "stock market" when:3d',
+      'site:timesofindia.indiatimes.com "stock market" when:3d',
+      'site:cnbctv18.com "stock market" when:3d',
+      'site:business-standard.com "stock market" when:3d',
     ];
 
-    // Fetch all queries in parallel
-    const results = await Promise.all(
-      queries.map(q =>
-        rssParser.parseURL(
+    // Fetch in batches of 3 to avoid Google News rate-limiting (429 Too Many Requests) while keeping it fast
+    const results: any[] = [];
+    for (let i = 0; i < queries.length; i += 3) {
+      const batch = queries.slice(i, i + 3);
+      const batchResults = await Promise.allSettled(
+        batch.map(q => rssParser.parseURL(
           `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-IN&gl=IN&ceid=IN:en`
-        ).catch(err => {
-          console.error(`[MarketNews] Query failed: "${q}" —`, err.message);
-          return { items: [] };
-        })
-      )
-    );
+        ))
+      );
+      
+      batchResults.forEach((res, idx) => {
+        if (res.status === 'fulfilled') {
+          results.push(res.value);
+        } else {
+          console.error(`[MarketNews] Query failed: "${batch[idx]}" —`, res.reason);
+        }
+      });
+      // Small delay between batches
+      if (i + 3 < queries.length) await new Promise(r => setTimeout(r, 400));
+    }
 
     // Merge all items from all queries
     const allItems: any[] = [];
@@ -330,12 +335,15 @@ app.get('/api/market-news', async (_req, res) => {
       new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
     );
 
-    console.log(`[MarketNews] Final: ${articles.length} unique articles after dedup`);
+    // Limit to 50 articles to avoid frontend rendering lag
+    const limitedArticles = articles.slice(0, 50);
+
+    console.log(`[MarketNews] Final: ${limitedArticles.length} unique articles after dedup`);
 
     // Cache the results
-    marketNewsCache = { data: articles, expires: Date.now() + MARKET_NEWS_TTL };
+    marketNewsCache = { data: limitedArticles, expires: Date.now() + MARKET_NEWS_TTL };
 
-    res.json(articles);
+    res.json(limitedArticles);
   } catch (err) {
     console.error('[MarketNews] Error:', err);
     // Return cached data even if expired, as fallback

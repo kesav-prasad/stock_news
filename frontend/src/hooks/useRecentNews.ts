@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { resilientFetch, isOnline } from '@/lib/offlineCache';
 
 const MARKET_NEWS_CACHE_KEY = 'sn_market_news_feed';
-const CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+const CACHE_TTL = 1 * 60 * 1000; // 1 minute
 
 interface MarketNewsArticle {
   id: string;
@@ -89,7 +89,7 @@ export function useRecentNews(
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://stocknews-backend.onrender.com';
       const res = await resilientFetch(`${baseUrl}/api/market-news`, {
-        timeoutMs: isForced ? 15000 : 10000,
+        timeoutMs: isForced ? 25000 : 20000,
         retries: isForced ? 1 : 0,
         retryDelayMs: 1000,
       });
