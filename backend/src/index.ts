@@ -245,13 +245,10 @@ app.get('/api/market-news', async (_req, res) => {
     console.log('[MarketNews] Fetching fresh news from Google News RSS...');
 
     const queries = [
-      'site:livemint.com "stock market" when:3d',
-      'site:moneycontrol.com "stock market" when:3d',
-      'site:economictimes.indiatimes.com "stock market" when:3d',
-      'site:news18.com "stock market" when:3d',
-      'site:timesofindia.indiatimes.com "stock market" when:3d',
-      'site:cnbctv18.com "stock market" when:3d',
-      'site:business-standard.com "stock market" when:3d',
+      '"finance news" India when:3d',
+      '"stock market" OR "share market" India when:3d',
+      'Sensex OR Nifty latest news when:3d',
+      'Indian economy business news when:3d',
     ];
 
     // Fetch in batches of 3 to avoid Google News rate-limiting (429 Too Many Requests) while keeping it fast
