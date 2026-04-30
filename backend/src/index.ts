@@ -234,6 +234,10 @@ function titleSimilarity(a: string, b: string): number {
 }
 
 app.get('/api/market-news', async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  
   try {
     // Return cached data if still fresh
     if (Date.now() < marketNewsCache.expires && marketNewsCache.data.length > 0) {

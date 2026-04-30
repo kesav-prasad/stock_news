@@ -92,6 +92,7 @@ export function useRecentNews(
         timeoutMs: isForced ? 25000 : 20000,
         retries: isForced ? 1 : 0,
         retryDelayMs: 1000,
+        fetchOptions: { cache: 'no-store' },
       });
       const articles: MarketNewsArticle[] = await res.json();
 

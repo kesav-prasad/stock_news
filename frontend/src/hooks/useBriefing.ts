@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { resilientFetch } from '@/lib/offlineCache';
 
 const CACHE_KEY = 'sn_ai_briefing';
-const CACHE_TTL = 1000 * 60 * 60 * 12; // 12 hours
+const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
 
 /**
  * Generate a smart client-side briefing from headlines
@@ -88,10 +88,10 @@ export function useBriefing(articles: any[]) {
         const localBriefing = generateLocalBriefing(articles);
         if (localBriefing) {
           setBriefing(localBriefing);
-          // Cache with shorter TTL (1 hour) since it's local-generated
+          // Cache with shorter TTL (1 minute) since it's local-generated
           localStorage.setItem(CACHE_KEY, JSON.stringify({
             data: localBriefing,
-            timestamp: Date.now() - (CACHE_TTL - 1000 * 60 * 60)
+            timestamp: Date.now() - CACHE_TTL + (1000 * 60)
           }));
         }
       } finally {
