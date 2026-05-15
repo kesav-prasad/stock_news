@@ -213,11 +213,38 @@ app.get('/api/companies/:id/historical', async (req, res) => {
 // ★ MARKET NEWS FEED — Single endpoint for ALL Indian stock market news
 // ==========================================
 
-const rssParser = new Parser();
+const rssParser = new Parser({
+  timeout: 8000, // 8-second per-feed timeout
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (compatible; MarketPulseBot/1.0)',
+    'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+  }
+});
 
-// In-memory cache for market news (avoids hitting Google News RSS too frequently)
+// In-memory cache for market news
 let marketNewsCache: { data: any[]; expires: number } = { data: [], expires: 0 };
-const MARKET_NEWS_TTL = 1 * 60 * 1000; // 1 minute
+const MARKET_NEWS_TTL = 2 * 60 * 1000; // 2 minutes
+
+// ✅ Keep-alive: ping this server every 14 minutes so Render never sleeps
+setInterval(async () => {
+  try {
+    const port = process.env.PORT || 4000;
+    await fetch(`http://localhost:${port}/api/health`);
+    console.log('[KeepAlive] Pinged self to prevent sleep');
+  } catch (_) {}
+}, 14 * 60 * 1000);
+
+/**
+ * Fetch a single RSS feed with a hard timeout.
+ */
+async function fetchFeedWithTimeout(url: string, timeoutMs = 8000): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Feed timeout: ${url}`)), timeoutMs);
+    rssParser.parseURL(url)
+      .then(result => { clearTimeout(timer); resolve(result); })
+      .catch(err => { clearTimeout(timer); reject(err); });
+  });
+}
 
 /**
  * Simple text similarity using Jaccard index on word sets.
@@ -246,113 +273,122 @@ app.get('/api/market-news', async (_req, res) => {
       return;
     }
 
-    console.log('[MarketNews] Fetching fresh real-time news from direct RSS feeds...');
-
-    const feeds = [
-      'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms',
-      'https://www.livemint.com/rss/markets',
-      'https://www.moneycontrol.com/rss/MCtopnews.xml',
-      'https://www.businesstoday.in/rss/rssapp.xml',
-      'https://www.cnbctv18.com/commonfeeds/v1/cne/rss/market.xml',
-      'https://news.google.com/rss/search?q=when:1d+AND+(site:msn.com/en-in/money+OR+site:stockaxis.com+OR+site:moneycontrol.com)&hl=en-IN&gl=IN&ceid=IN:en'
-    ];
-    
-    let allItems: any[] = [];
-    try {
-      const results = await Promise.allSettled(feeds.map(f => rssParser.parseURL(f)));
-      results.forEach((res, index) => {
-        if (res.status === 'fulfilled' && res.value.items) {
-          let feedName = res.value.title || 'Market News';
-          if (feeds[index].includes('mint')) feedName = 'Livemint';
-          if (feeds[index].includes('moneycontrol')) feedName = 'MoneyControl';
-          if (feeds[index].includes('businesstoday')) feedName = 'Business Today';
-          if (feeds[index].includes('cnbctv18')) feedName = 'CNBC TV18';
-          if (feeds[index].includes('google')) feedName = 'Market Intelligence';
-          if (feeds[index].includes('economictimes')) feedName = 'Economic Times';
-          
-          const itemsWithSource = res.value.items.map(item => ({ ...item, _sourceName: feedName }));
-          allItems.push(...itemsWithSource);
-        } else if (res.status === 'rejected') {
-          console.error(`[MarketNews] Feed failed (${feeds[index]}):`, res.reason);
-        }
-      });
-    } catch (error) {
-      console.error('[MarketNews] Direct RSS queries failed:', error);
+    // If cache is stale but not empty, immediately return stale data and refresh in background
+    if (marketNewsCache.data.length > 0) {
+      console.log('[MarketNews] Serving stale cache, refreshing in background...');
+      res.json(marketNewsCache.data);
+      // Async background refresh
+      refreshNewsCache().catch(e => console.error('[MarketNews] BG refresh error:', e));
+      return;
     }
 
-    console.log(`[MarketNews] Raw items from direct feeds: ${allItems.length}`);
+    console.log('[MarketNews] Cold start: fetching fresh real-time news...');
+    await refreshNewsCache();
+    res.json(marketNewsCache.data);
+    return;
 
-    // Deduplicate by URL first
-    const seenUrls = new Set<string>();
-    const urlDeduped: any[] = [];
-    for (const item of allItems) {
-      if (!item.title || !item.link) continue;
-      if (seenUrls.has(item.link)) continue;
-      seenUrls.add(item.link);
-      urlDeduped.push(item);
-    }
-
-    // Deduplicate by title similarity (Jaccard > 0.65 = duplicate)
-    const dedupedItems: any[] = [];
-    for (const item of urlDeduped) {
-      const isDuplicate = dedupedItems.some(
-        existing => titleSimilarity(existing.title, item.title) > 0.65
-      );
-      if (!isDuplicate) dedupedItems.push(item);
-    }
-
-    // Parse into structured articles
-    const bullishWords = /\b(surge|jump|soar|buy|upgrade|record|profit|gain|growth|rally|soars|up|higher|revenue|win|bull|expansion|beat|outperform|rise|rises|bullish|positive|upbeat|boom)\b/i;
-    const bearishWords = /\b(plunge|drop|fall|sell|downgrade|loss|decline|miss|down|lower|lawsuit|bear|shrink|underperform|crash|weakness|probe|investigate|fraud|scam|fine|tank|slump|tumble|bearish|negative)\b/i;
-
-    const articles = dedupedItems.map(item => {
-      let source = item._sourceName || 'News';
-      const dashIdx = item.title.lastIndexOf(' - ');
-      let title = item.title;
-      if (!item._sourceName && dashIdx !== -1) {
-        source = item.title.substring(dashIdx + 3).trim();
-        title = item.title.substring(0, dashIdx).trim();
-      }
-
-      const titleLower = title.toLowerCase();
-      let sentiment = 'neutral';
-      if (bearishWords.test(titleLower) && !bullishWords.test(titleLower)) sentiment = 'bearish';
-      else if (bullishWords.test(titleLower) && !bearishWords.test(titleLower)) sentiment = 'bullish';
-
-      return {
-        id: item.link,
-        title,
-        url: item.link,
-        source,
-        publishedAt: item.isoDate || new Date().toISOString(),
-        sentiment,
-      };
-    });
-
-    // Sort by publishedAt descending (newest first)
-    articles.sort((a, b) =>
-      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
-    );
-
-    // Limit to 50 articles to avoid frontend rendering lag
-    const limitedArticles = articles.slice(0, 50);
-
-    console.log(`[MarketNews] Final: ${limitedArticles.length} unique articles after dedup`);
-
-    // Cache the results
-    marketNewsCache = { data: limitedArticles, expires: Date.now() + MARKET_NEWS_TTL };
-
-    res.json(limitedArticles);
   } catch (err) {
     console.error('[MarketNews] Error:', err);
-    // Return cached data even if expired, as fallback
     if (marketNewsCache.data.length > 0) {
       res.json(marketNewsCache.data);
-    } else {
-      res.status(500).json({ error: 'Failed to fetch market news' });
+      return;
     }
+    res.status(500).json({ error: 'Failed to load news', message: String(err) });
   }
 });
+
+async function refreshNewsCache() {
+  const feeds = [
+    { url: 'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms', name: 'Economic Times' },
+    { url: 'https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms', name: 'Economic Times' },
+    { url: 'https://www.livemint.com/rss/markets', name: 'Livemint' },
+    { url: 'https://www.moneycontrol.com/rss/MCtopnews.xml', name: 'MoneyControl' },
+    { url: 'https://www.moneycontrol.com/rss/marketreports.xml', name: 'MoneyControl' },
+    { url: 'https://www.businesstoday.in/rss/rssapp.xml', name: 'Business Today' },
+    { url: 'https://www.cnbctv18.com/commonfeeds/v1/cne/rss/market.xml', name: 'CNBC TV18' },
+    { url: 'https://news.google.com/rss/search?q=indian+stock+market+NSE+BSE&hl=en-IN&gl=IN&ceid=IN:en', name: 'Google News' },
+    { url: 'https://news.google.com/rss/search?q=SEBI+Nifty+Sensex+stocks&hl=en-IN&gl=IN&ceid=IN:en', name: 'Google News' },
+  ];
+  
+  let allItems: any[] = [];
+  
+  const results = await Promise.allSettled(
+    feeds.map(f => fetchFeedWithTimeout(f.url, 8000).then(data => ({ data, feedName: f.name })))
+  );
+  
+  results.forEach((res, index) => {
+    if (res.status === 'fulfilled' && res.value.data.items) {
+      const feedName = res.value.feedName;
+      const itemsWithSource = res.value.data.items.map((item: any) => ({ ...item, _sourceName: feedName }));
+      allItems.push(...itemsWithSource);
+      console.log(`[MarketNews] ✅ ${feedName}: ${res.value.data.items.length} items`);
+    } else if (res.status === 'rejected') {
+      console.error(`[MarketNews] ❌ Feed #${index + 1} failed:`, (res.reason as Error).message);
+    }
+  });
+
+  console.log(`[MarketNews] Raw items from all feeds: ${allItems.length}`);
+
+  // Deduplicate by URL first
+  const seenUrls = new Set<string>();
+  const urlDeduped: any[] = [];
+  for (const item of allItems) {
+    if (!item.title || !item.link) continue;
+    if (seenUrls.has(item.link)) continue;
+    seenUrls.add(item.link);
+    urlDeduped.push(item);
+  }
+
+  // Deduplicate by title similarity (Jaccard > 0.6 = duplicate)
+  const dedupedItems: any[] = [];
+  for (const item of urlDeduped) {
+    const isDuplicate = dedupedItems.some(
+      existing => titleSimilarity(existing.title, item.title) > 0.6
+    );
+    if (!isDuplicate) dedupedItems.push(item);
+  }
+
+  // Parse into structured articles
+  const bullishWords = /\b(surge|jump|soar|buy|upgrade|record|profit|gain|growth|rally|soars|up|higher|revenue|win|bull|expansion|beat|outperform|rise|rises|bullish|positive|upbeat|boom)\b/i;
+  const bearishWords = /\b(plunge|drop|fall|sell|downgrade|loss|decline|miss|down|lower|lawsuit|bear|shrink|underperform|crash|weakness|probe|investigate|fraud|scam|fine|tank|slump|tumble|bearish|negative)\b/i;
+
+  const articles = dedupedItems.map(item => {
+    let source = item._sourceName || 'News';
+    const dashIdx = item.title.lastIndexOf(' - ');
+    let title = item.title;
+    if (!item._sourceName && dashIdx !== -1) {
+      source = item.title.substring(dashIdx + 3).trim();
+      title = item.title.substring(0, dashIdx).trim();
+    }
+
+    const titleLower = title.toLowerCase();
+    let sentiment = 'neutral';
+    if (bearishWords.test(titleLower) && !bullishWords.test(titleLower)) sentiment = 'bearish';
+    else if (bullishWords.test(titleLower) && !bearishWords.test(titleLower)) sentiment = 'bullish';
+
+    return {
+      id: item.link,
+      title,
+      url: item.link,
+      source,
+      publishedAt: item.isoDate || new Date().toISOString(),
+      sentiment,
+    };
+  });
+
+  // Sort by publishedAt descending (newest first)
+  articles.sort((a, b) =>
+    new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+  );
+
+  // Limit to 120 articles for a rich feed
+  const limitedArticles = articles.slice(0, 120);
+
+  console.log(`[MarketNews] Final: ${limitedArticles.length} unique articles after dedup`);
+
+  // Cache the results
+  marketNewsCache = { data: limitedArticles, expires: Date.now() + MARKET_NEWS_TTL };
+}
 
 // ★ AI Morning Briefing Generator
 // NOTE: OpenAI is lazy-imported inside the handler to prevent server crash
