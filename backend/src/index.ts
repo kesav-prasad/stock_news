@@ -277,7 +277,7 @@ app.get('/api/market-news', async (_req, res) => {
           if (feeds[index].includes('google')) feedName = 'Market Intelligence';
           if (feeds[index].includes('economictimes')) feedName = 'Economic Times';
           
-          const itemsWithSource = res.value.items.map(item => ({ ...item, _sourceName: feedName }));
+          const itemsWithSource = res.value.items.map((item: any) => ({ ...item, _sourceName: feedName }));
           allItems.push(...itemsWithSource);
         } else if (res.status === 'rejected') {
           console.error(`[MarketNews] Feed failed (${feeds[index]}):`, res.reason);
