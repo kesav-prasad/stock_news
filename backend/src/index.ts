@@ -246,43 +246,31 @@ app.get('/api/market-news', async (_req, res) => {
       return;
     }
 
-    console.log('[MarketNews] Fetching fresh news from Google News RSS...');
+    console.log('[MarketNews] Fetching fresh real-time news from direct RSS feeds...');
 
-    const queries = [
-      '"finance news" India when:3d',
-      '"stock market" OR "share market" India when:3d',
-      'Sensex OR Nifty latest news when:3d',
-      'Indian economy business news when:3d',
+    const feeds = [
+      'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms',
+      'https://www.livemint.com/rss/markets',
+      'https://feeds.feedburner.com/ndtvprofit-latest'
     ];
-
-    // Fetch in batches of 3 to avoid Google News rate-limiting (429 Too Many Requests) while keeping it fast
-    const results: any[] = [];
-    for (let i = 0; i < queries.length; i += 3) {
-      const batch = queries.slice(i, i + 3);
-      const batchResults = await Promise.allSettled(
-        batch.map(q => rssParser.parseURL(
-          `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-IN&gl=IN&ceid=IN:en`
-        ))
-      );
-      
-      batchResults.forEach((res, idx) => {
-        if (res.status === 'fulfilled') {
-          results.push(res.value);
-        } else {
-          console.error(`[MarketNews] Query failed: "${batch[idx]}" —`, res.reason);
+    
+    let allItems: any[] = [];
+    try {
+      const results = await Promise.allSettled(feeds.map(f => rssParser.parseURL(f)));
+      results.forEach((res, index) => {
+        if (res.status === 'fulfilled' && res.value.items) {
+          const feedName = res.value.title || (feeds[index].includes('mint') ? 'Livemint' : feeds[index].includes('ndtv') ? 'NDTV Profit' : 'Economic Times');
+          const itemsWithSource = res.value.items.map(item => ({ ...item, _sourceName: feedName }));
+          allItems.push(...itemsWithSource);
+        } else if (res.status === 'rejected') {
+          console.error(`[MarketNews] Feed failed (${feeds[index]}):`, res.reason);
         }
       });
-      // Small delay between batches
-      if (i + 3 < queries.length) await new Promise(r => setTimeout(r, 400));
+    } catch (error) {
+      console.error('[MarketNews] Direct RSS queries failed:', error);
     }
 
-    // Merge all items from all queries
-    const allItems: any[] = [];
-    for (const feed of results) {
-      if (feed.items) allItems.push(...feed.items);
-    }
-
-    console.log(`[MarketNews] Raw items from ${queries.length} queries: ${allItems.length}`);
+    console.log(`[MarketNews] Raw items from direct feeds: ${allItems.length}`);
 
     // Deduplicate by URL first
     const seenUrls = new Set<string>();
@@ -308,10 +296,10 @@ app.get('/api/market-news', async (_req, res) => {
     const bearishWords = /\b(plunge|drop|fall|sell|downgrade|loss|decline|miss|down|lower|lawsuit|bear|shrink|underperform|crash|weakness|probe|investigate|fraud|scam|fine|tank|slump|tumble|bearish|negative)\b/i;
 
     const articles = dedupedItems.map(item => {
-      let source = 'Google News';
+      let source = item._sourceName || 'News';
       const dashIdx = item.title.lastIndexOf(' - ');
       let title = item.title;
-      if (dashIdx !== -1) {
+      if (!item._sourceName && dashIdx !== -1) {
         source = item.title.substring(dashIdx + 3).trim();
         title = item.title.substring(0, dashIdx).trim();
       }
