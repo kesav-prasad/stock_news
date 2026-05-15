@@ -251,7 +251,10 @@ app.get('/api/market-news', async (_req, res) => {
     const feeds = [
       'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms',
       'https://www.livemint.com/rss/markets',
-      'https://feeds.feedburner.com/ndtvprofit-latest'
+      'https://www.moneycontrol.com/rss/MCtopnews.xml',
+      'https://www.businesstoday.in/rss/rssapp.xml',
+      'https://www.cnbctv18.com/commonfeeds/v1/cne/rss/market.xml',
+      'https://news.google.com/rss/search?q=when:1d+AND+(site:msn.com/en-in/money+OR+site:stockaxis.com+OR+site:moneycontrol.com)&hl=en-IN&gl=IN&ceid=IN:en'
     ];
     
     let allItems: any[] = [];
@@ -259,7 +262,14 @@ app.get('/api/market-news', async (_req, res) => {
       const results = await Promise.allSettled(feeds.map(f => rssParser.parseURL(f)));
       results.forEach((res, index) => {
         if (res.status === 'fulfilled' && res.value.items) {
-          const feedName = res.value.title || (feeds[index].includes('mint') ? 'Livemint' : feeds[index].includes('ndtv') ? 'NDTV Profit' : 'Economic Times');
+          let feedName = res.value.title || 'Market News';
+          if (feeds[index].includes('mint')) feedName = 'Livemint';
+          if (feeds[index].includes('moneycontrol')) feedName = 'MoneyControl';
+          if (feeds[index].includes('businesstoday')) feedName = 'Business Today';
+          if (feeds[index].includes('cnbctv18')) feedName = 'CNBC TV18';
+          if (feeds[index].includes('google')) feedName = 'Market Intelligence';
+          if (feeds[index].includes('economictimes')) feedName = 'Economic Times';
+          
           const itemsWithSource = res.value.items.map(item => ({ ...item, _sourceName: feedName }));
           allItems.push(...itemsWithSource);
         } else if (res.status === 'rejected') {
