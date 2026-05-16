@@ -233,19 +233,10 @@ function titleSimilarity(a: string, b: string): number {
   return intersection.size / union.size;
 }
 
-app.get('/api/market-news', async (_req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  
-  try {
-    // Return cached data if still fresh
-    if (Date.now() < marketNewsCache.expires && marketNewsCache.data.length > 0) {
-      console.log(`[MarketNews] Serving ${marketNewsCache.data.length} cached articles`);
-      res.json(marketNewsCache.data);
-      return;
-    }
+let isFetchingNews = false;
 
+async function refreshMarketNews() {
+  try {
     console.log('[MarketNews] Fetching fresh real-time news from direct RSS feeds...');
 
     const feeds = [
@@ -258,34 +249,30 @@ app.get('/api/market-news', async (_req, res) => {
     ];
     
     let allItems: any[] = [];
-    try {
-      const fetchWithTimeout = (url: string, timeoutMs: number) => {
-        return Promise.race([
-          rssParser.parseURL(url),
-          new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Feed timeout: ' + url)), timeoutMs))
-        ]);
-      };
+    const fetchWithTimeout = (url: string, timeoutMs: number) => {
+      return Promise.race([
+        rssParser.parseURL(url),
+        new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Feed timeout: ' + url)), timeoutMs))
+      ]);
+    };
 
-      const results = await Promise.allSettled(feeds.map(f => fetchWithTimeout(f, 6000)));
-      results.forEach((res, index) => {
-        if (res.status === 'fulfilled' && res.value.items) {
-          let feedName = res.value.title || 'Market News';
-          if (feeds[index].includes('mint')) feedName = 'Livemint';
-          if (feeds[index].includes('moneycontrol')) feedName = 'MoneyControl';
-          if (feeds[index].includes('businesstoday')) feedName = 'Business Today';
-          if (feeds[index].includes('cnbctv18')) feedName = 'CNBC TV18';
-          if (feeds[index].includes('google')) feedName = 'Market Intelligence';
-          if (feeds[index].includes('economictimes')) feedName = 'Economic Times';
-          
-          const itemsWithSource = res.value.items.map((item: any) => ({ ...item, _sourceName: feedName }));
-          allItems.push(...itemsWithSource);
-        } else if (res.status === 'rejected') {
-          console.error(`[MarketNews] Feed failed (${feeds[index]}):`, res.reason);
-        }
-      });
-    } catch (error) {
-      console.error('[MarketNews] Direct RSS queries failed:', error);
-    }
+    const results = await Promise.allSettled(feeds.map(f => fetchWithTimeout(f, 6000)));
+    results.forEach((res, index) => {
+      if (res.status === 'fulfilled' && res.value.items) {
+        let feedName = res.value.title || 'Market News';
+        if (feeds[index].includes('mint')) feedName = 'Livemint';
+        if (feeds[index].includes('moneycontrol')) feedName = 'MoneyControl';
+        if (feeds[index].includes('businesstoday')) feedName = 'Business Today';
+        if (feeds[index].includes('cnbctv18')) feedName = 'CNBC TV18';
+        if (feeds[index].includes('google')) feedName = 'Market Intelligence';
+        if (feeds[index].includes('economictimes')) feedName = 'Economic Times';
+        
+        const itemsWithSource = res.value.items.map((item: any) => ({ ...item, _sourceName: feedName }));
+        allItems.push(...itemsWithSource);
+      } else if (res.status === 'rejected') {
+        console.error(`[MarketNews] Feed failed (${feeds[index]}):`, res.reason);
+      }
+    });
 
     console.log(`[MarketNews] Raw items from direct feeds: ${allItems.length}`);
 
@@ -336,23 +323,51 @@ app.get('/api/market-news', async (_req, res) => {
       };
     });
 
-    // Sort by publishedAt descending (newest first)
-    articles.sort((a, b) =>
-      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
-    );
-
-    // Limit to 200 articles
+    articles.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     const limitedArticles = articles.slice(0, 200);
 
     console.log(`[MarketNews] Final: ${limitedArticles.length} unique articles after dedup`);
-
-    // Cache the results
     marketNewsCache = { data: limitedArticles, expires: Date.now() + MARKET_NEWS_TTL };
-
-    res.json(limitedArticles);
+    return limitedArticles;
   } catch (err) {
-    console.error('[MarketNews] Error:', err);
-    // Return cached data even if expired, as fallback
+    console.error('[MarketNews] Error refreshing:', err);
+    throw err;
+  }
+}
+
+app.get('/api/market-news', async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  
+  try {
+    if (marketNewsCache.data.length > 0) {
+      if (Date.now() >= marketNewsCache.expires) {
+        if (!isFetchingNews) {
+          isFetchingNews = true;
+          refreshMarketNews().finally(() => { isFetchingNews = false; });
+        }
+      }
+      res.json(marketNewsCache.data);
+      return;
+    }
+
+    if (!isFetchingNews) {
+      isFetchingNews = true;
+      const data = await refreshMarketNews().finally(() => { isFetchingNews = false; });
+      res.json(data);
+      return;
+    } else {
+      // If currently fetching for the first time, poll until cache is populated
+      let attempts = 0;
+      while (marketNewsCache.data.length === 0 && attempts < 20) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        attempts++;
+      }
+      res.json(marketNewsCache.data);
+    }
+  } catch (err) {
+    console.error('[MarketNews] Endpoint Error:', err);
     if (marketNewsCache.data.length > 0) {
       res.json(marketNewsCache.data);
     } else {
